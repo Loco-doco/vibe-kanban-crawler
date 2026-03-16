@@ -28,6 +28,16 @@ defmodule LeadResearcherWeb.LeadController do
     end
   end
 
+  def delete(conn, %{"id" => id}) do
+    lead = Leads.get_lead!(id)
+
+    case Leads.delete_lead(lead) do
+      {:ok, _} -> send_resp(conn, :no_content, "")
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "삭제 실패"})
+    end
+  end
+
   def export_csv(conn, params) do
     leads = Leads.list_leads(Map.put(params, "limit", 10_000))
     csv = CsvExporter.to_csv(leads)
