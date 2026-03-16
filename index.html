@@ -716,6 +716,346 @@
       color: var(--gray-400);
     }
 
+    /* ===== Page Sections ===== */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ===== Empty State ===== */
+    .empty-state {
+      text-align: center;
+      padding: 80px 40px;
+    }
+
+    .empty-state-icon {
+      font-size: 3.5rem;
+      margin-bottom: 16px;
+      display: block;
+      opacity: 0.7;
+    }
+
+    .empty-state h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      font-size: 0.9rem;
+      color: var(--gray-500);
+      max-width: 400px;
+      margin: 0 auto 24px;
+      line-height: 1.6;
+    }
+
+    /* ===== Page Header ===== */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .page-header h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .page-header-sub {
+      font-size: 0.85rem;
+      color: var(--gray-500);
+      margin-top: 4px;
+    }
+
+    .page-header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ===== Filter Bar ===== */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-bar .search-input-box {
+      display: flex;
+      align-items: center;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      flex: 1;
+      max-width: 320px;
+    }
+
+    .filter-bar .search-input-box input {
+      border: none;
+      background: transparent;
+      padding: 8px;
+      font-size: 0.85rem;
+      outline: none;
+      font-family: inherit;
+      width: 100%;
+      color: var(--gray-900);
+    }
+
+    .filter-bar .search-input-box input::placeholder { color: var(--gray-400); }
+
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      color: var(--gray-600);
+      background: white;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-chip:hover {
+      border-color: var(--primary-600);
+      color: var(--primary-600);
+    }
+
+    .filter-chip.active {
+      background: var(--primary-50);
+      border-color: var(--primary-600);
+      color: var(--primary-600);
+    }
+
+    /* ===== Settings Section ===== */
+    .settings-section {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .settings-section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-100);
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    .settings-row:last-child { border-bottom: none; }
+
+    .settings-row-label {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .settings-row-label span:first-child {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--gray-900);
+    }
+
+    .settings-row-label span:last-child {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+    }
+
+    .toggle-switch {
+      width: 44px;
+      height: 24px;
+      background: var(--gray-200);
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch.on { background: var(--primary-600); }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .toggle-switch.on::after { transform: translateX(20px); }
+
+    /* ===== Template / Campaign Cards ===== */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .template-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: box-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .template-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border-color: var(--primary-500);
+    }
+
+    .template-card-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .template-card-preview {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+      line-height: 1.5;
+      margin-bottom: 12px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .template-card-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--gray-400);
+    }
+
+    /* ===== Sequence Timeline ===== */
+    .sequence-steps {
+      padding: 20px;
+    }
+
+    .sequence-step {
+      display: flex;
+      gap: 16px;
+      position: relative;
+      padding-bottom: 24px;
+    }
+
+    .sequence-step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 17px;
+      top: 38px;
+      bottom: 0;
+      width: 2px;
+      background: var(--gray-200);
+    }
+
+    .sequence-step-number {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--primary-50);
+      color: var(--primary-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .sequence-step-content {
+      flex: 1;
+    }
+
+    .sequence-step-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+
+    .sequence-step-desc {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+    }
+
+    .sequence-step-delay {
+      font-size: 0.75rem;
+      color: var(--warning);
+      font-weight: 500;
+      margin-top: 6px;
+    }
+
+    /* ===== Help Page ===== */
+    .help-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .help-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .help-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border-color: var(--primary-500);
+    }
+
+    .help-card-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .help-card h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .help-card p {
+      font-size: 0.8rem;
+      color: var(--gray-500);
+      line-height: 1.5;
+    }
+
     /* ===== Sidebar Overlay ===== */
     .sidebar-overlay {
       display: none;
@@ -809,11 +1149,11 @@
     <nav class="sidebar-nav">
       <div class="nav-section">
         <span class="nav-section-label">메인</span>
-        <a href="#dashboard" class="nav-item active">
+        <a data-page="dashboard" class="nav-item active">
           <span class="nav-icon">&#x1F4CA;</span>
           <span class="nav-label">대시보드</span>
         </a>
-        <a href="#leads" class="nav-item">
+        <a data-page="leads" class="nav-item">
           <span class="nav-icon">&#x1F465;</span>
           <span class="nav-label">리드 관리</span>
           <span class="nav-badge">1,247</span>
@@ -822,15 +1162,15 @@
 
       <div class="nav-section">
         <span class="nav-section-label">아웃바운드</span>
-        <a href="#campaigns" class="nav-item">
+        <a data-page="campaigns" class="nav-item">
           <span class="nav-icon">&#x2709;&#xFE0F;</span>
           <span class="nav-label">이메일 캠페인</span>
         </a>
-        <a href="#templates" class="nav-item">
+        <a data-page="templates" class="nav-item">
           <span class="nav-icon">&#x1F4C4;</span>
           <span class="nav-label">이메일 템플릿</span>
         </a>
-        <a href="#sequences" class="nav-item">
+        <a data-page="sequences" class="nav-item">
           <span class="nav-icon">&#x1F504;</span>
           <span class="nav-label">시퀀스</span>
         </a>
@@ -838,12 +1178,12 @@
 
       <div class="nav-section">
         <span class="nav-section-label">리서치</span>
-        <a href="#jobs" class="nav-item">
+        <a data-page="jobs" class="nav-item">
           <span class="nav-icon">&#x1F50D;</span>
           <span class="nav-label">크롤링 작업</span>
           <span class="nav-badge success">3 실행 중</span>
         </a>
-        <a href="#research" class="nav-item">
+        <a data-page="research" class="nav-item">
           <span class="nav-icon">&#x1F9F2;</span>
           <span class="nav-label">리서치 도구</span>
         </a>
@@ -851,11 +1191,11 @@
 
       <div class="nav-section">
         <span class="nav-section-label">분석</span>
-        <a href="#reports" class="nav-item">
+        <a data-page="reports" class="nav-item">
           <span class="nav-icon">&#x1F4C8;</span>
           <span class="nav-label">리포트</span>
         </a>
-        <a href="#performance" class="nav-item">
+        <a data-page="performance" class="nav-item">
           <span class="nav-icon">&#x1F3AF;</span>
           <span class="nav-label">성과 분석</span>
         </a>
@@ -863,11 +1203,11 @@
     </nav>
 
     <div class="sidebar-bottom">
-      <a href="#settings" class="nav-item">
+      <a data-page="settings" class="nav-item">
         <span class="nav-icon">&#x2699;&#xFE0F;</span>
         <span class="nav-label">설정</span>
       </a>
-      <a href="#help" class="nav-item">
+      <a data-page="help" class="nav-item">
         <span class="nav-icon">&#x2753;</span>
         <span class="nav-label">도움말</span>
       </a>
@@ -913,6 +1253,9 @@
 
     <!-- ===== CONTENT ===== -->
     <main class="content">
+
+      <!-- ========== PAGE: Dashboard ========== -->
+      <div class="page active" id="page-dashboard">
 
       <!-- Quick Actions -->
       <div class="quick-actions">
@@ -1235,10 +1578,884 @@
         </div>
       </div>
 
+      </div><!-- /page-dashboard -->
+
+      <!-- ========== PAGE: Leads ========== -->
+      <div class="page" id="page-leads">
+        <div class="page-header">
+          <div>
+            <h2>리드 관리</h2>
+            <p class="page-header-sub">수집된 모든 연락처를 관리하고 상태를 업데이트하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-secondary"><span>&#x2B07;&#xFE0F;</span> CSV 내보내기</button>
+            <button class="btn btn-primary"><span>&#x2795;</span> 리드 추가</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <div class="search-input-box">
+            <span style="color: var(--gray-400); margin-right: 4px;">&#x1F50E;</span>
+            <input type="text" placeholder="이메일, 채널명으로 검색...">
+          </div>
+          <span class="filter-chip active">전체 1,247</span>
+          <span class="filter-chip">확인됨 312</span>
+          <span class="filter-chip">수집 완료 687</span>
+          <span class="filter-chip">연락함 156</span>
+          <span class="filter-chip">답변 받음 58</span>
+          <span class="filter-chip">직접 확인 34</span>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>이메일</th>
+                  <th>플랫폼</th>
+                  <th>채널명</th>
+                  <th>구독자</th>
+                  <th>정확도</th>
+                  <th>상태</th>
+                  <th>수집일</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="email-cell">creator1@gmail.com</td>
+                  <td><span class="platform-badge youtube">YouTube</span></td>
+                  <td>테크리뷰</td>
+                  <td>52만</td>
+                  <td><span class="confidence high">92%</span></td>
+                  <td><span class="status-badge verified">확인됨</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-15</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">beauty@naver.com</td>
+                  <td><span class="platform-badge instagram">Instagram</span></td>
+                  <td>뷰티하울</td>
+                  <td>28만</td>
+                  <td><span class="confidence high">78%</span></td>
+                  <td><span class="status-badge scraped">수집 완료</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-15</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">travel@blog.com</td>
+                  <td><span class="platform-badge web">Web</span></td>
+                  <td>여행블로그</td>
+                  <td>-</td>
+                  <td><span class="confidence mid">45%</span></td>
+                  <td><span class="status-badge review">직접 확인 필요</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-14</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">food.kr@gmail.com</td>
+                  <td><span class="platform-badge youtube">YouTube</span></td>
+                  <td>먹방천국</td>
+                  <td>120만</td>
+                  <td><span class="confidence high">88%</span></td>
+                  <td><span class="status-badge contacted">연락함</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-14</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">style@email.com</td>
+                  <td><span class="platform-badge instagram">Instagram</span></td>
+                  <td>스타일링</td>
+                  <td>8.5만</td>
+                  <td><span class="confidence low">35%</span></td>
+                  <td><span class="status-badge scraped">수집 완료</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-13</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">game@gmail.com</td>
+                  <td><span class="platform-badge youtube">YouTube</span></td>
+                  <td>겜돌이</td>
+                  <td>340만</td>
+                  <td><span class="confidence high">95%</span></td>
+                  <td><span class="status-badge replied">답변 받음</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-12</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">cook@blog.kr</td>
+                  <td><span class="platform-badge web">Web</span></td>
+                  <td>요리왕</td>
+                  <td>-</td>
+                  <td><span class="confidence mid">52%</span></td>
+                  <td><span class="status-badge verified">확인됨</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-12</td>
+                </tr>
+                <tr>
+                  <td class="email-cell">fitness@naver.com</td>
+                  <td><span class="platform-badge instagram">Instagram</span></td>
+                  <td>헬스타그램</td>
+                  <td>15만</td>
+                  <td><span class="confidence high">81%</span></td>
+                  <td><span class="status-badge contacted">연락함</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">2026-03-11</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Campaigns ========== -->
+      <div class="page" id="page-campaigns">
+        <div class="page-header">
+          <div>
+            <h2>이메일 캠페인</h2>
+            <p class="page-header-sub">아웃바운드 이메일 캠페인을 만들고 관리하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary"><span>&#x2795;</span> 새 캠페인</button>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="template-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span class="status-badge verified">진행 중</span>
+              <span style="font-size:0.75rem; color:var(--gray-400);">3월 10일 시작</span>
+            </div>
+            <div class="template-card-title">유튜버 협업 제안</div>
+            <div class="template-card-preview">테크 분야 유튜버 대상 제품 리뷰 협업 제안 캠페인. 1차 발송 완료, 2차 팔로업 진행 중.</div>
+            <div class="template-card-meta">
+              <span>발송: 23건</span>
+              <span>오픈: 15건 (65%)</span>
+              <span>응답: 4건 (17%)</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span class="status-badge verified">진행 중</span>
+              <span style="font-size:0.75rem; color:var(--gray-400);">3월 8일 시작</span>
+            </div>
+            <div class="template-card-title">인스타 뷰티 인플루언서</div>
+            <div class="template-card-preview">뷰티/화장품 분야 인스타그램 인플루언서 대상 제품 협찬 제안.</div>
+            <div class="template-card-meta">
+              <span>발송: 45건</span>
+              <span>오픈: 32건 (71%)</span>
+              <span>응답: 8건 (18%)</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span class="status-badge scraped">준비 중</span>
+              <span style="font-size:0.75rem; color:var(--gray-400);">미발송</span>
+            </div>
+            <div class="template-card-title">블로그 리뷰어 아웃리치</div>
+            <div class="template-card-preview">네이버/티스토리 블로그 리뷰어 대상 체험단 모집 이메일.</div>
+            <div class="template-card-meta">
+              <span>대상: 34명</span>
+              <span>템플릿: 선택됨</span>
+              <span>예약: 미설정</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span class="status-badge contacted">완료</span>
+              <span style="font-size:0.75rem; color:var(--gray-400);">2월 20일</span>
+            </div>
+            <div class="template-card-title">신제품 런칭 알림</div>
+            <div class="template-card-preview">기존 협업 인플루언서 대상 신제품 출시 알림 및 재협업 제안.</div>
+            <div class="template-card-meta">
+              <span>발송: 89건</span>
+              <span>오픈: 72건 (81%)</span>
+              <span>응답: 23건 (26%)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Templates ========== -->
+      <div class="page" id="page-templates">
+        <div class="page-header">
+          <div>
+            <h2>이메일 템플릿</h2>
+            <p class="page-header-sub">자주 사용하는 이메일 양식을 저장하고 재사용하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary"><span>&#x2795;</span> 새 템플릿</button>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="template-card">
+            <div class="template-card-title">첫 번째 협업 제안</div>
+            <div class="template-card-preview">안녕하세요, {channel_name} 채널을 운영하고 계신 {name}님. 저희는 {company}에서 연락드립니다. {name}님의 콘텐츠를 통해 저희 제품을 소개해주실 의향이 있으신지 문의드립니다...</div>
+            <div class="template-card-meta">
+              <span>사용: 156회</span>
+              <span>오픈율: 68%</span>
+              <span>수정: 3일 전</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div class="template-card-title">팔로업 (미응답)</div>
+            <div class="template-card-preview">안녕하세요 {name}님, 지난번 보내드린 메일 확인하셨는지 궁금합니다. 바쁘신 와중에 죄송하지만, 간단히 회신 부탁드려도 될까요...</div>
+            <div class="template-card-meta">
+              <span>사용: 89회</span>
+              <span>오픈율: 54%</span>
+              <span>수정: 1주 전</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div class="template-card-title">체험단 모집 안내</div>
+            <div class="template-card-preview">{name}님 안녕하세요! 저희 {product} 체험단을 모집하고 있습니다. {name}님의 채널과 잘 맞을 것 같아 안내드립니다. 관심 있으시면...</div>
+            <div class="template-card-meta">
+              <span>사용: 67회</span>
+              <span>오픈율: 72%</span>
+              <span>수정: 2주 전</span>
+            </div>
+          </div>
+          <div class="template-card">
+            <div class="template-card-title">감사 인사 + 재협업</div>
+            <div class="template-card-preview">{name}님, 지난 협업에 감사드립니다. {name}님 덕분에 좋은 성과를 거둘 수 있었습니다. 이번에 새로운 프로젝트가 있어 다시 한번...</div>
+            <div class="template-card-meta">
+              <span>사용: 34회</span>
+              <span>오픈율: 82%</span>
+              <span>수정: 1달 전</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Sequences ========== -->
+      <div class="page" id="page-sequences">
+        <div class="page-header">
+          <div>
+            <h2>시퀀스</h2>
+            <p class="page-header-sub">자동 팔로업 이메일 시퀀스를 설정하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary"><span>&#x2795;</span> 새 시퀀스</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">유튜버 협업 시퀀스</h2>
+            <span class="status-badge verified">활성</span>
+          </div>
+          <div class="sequence-steps">
+            <div class="sequence-step">
+              <div class="sequence-step-number">1</div>
+              <div class="sequence-step-content">
+                <div class="sequence-step-title">첫 번째 협업 제안 발송</div>
+                <div class="sequence-step-desc">템플릿 "첫 번째 협업 제안"을 사용하여 초기 이메일 발송</div>
+              </div>
+            </div>
+            <div class="sequence-step">
+              <div class="sequence-step-number">2</div>
+              <div class="sequence-step-content">
+                <div class="sequence-step-title">팔로업 이메일 (미응답 시)</div>
+                <div class="sequence-step-desc">첫 메일에 응답이 없는 경우 팔로업 이메일 자동 발송</div>
+                <div class="sequence-step-delay">&#x23F0; 3일 후 자동 발송</div>
+              </div>
+            </div>
+            <div class="sequence-step">
+              <div class="sequence-step-number">3</div>
+              <div class="sequence-step-content">
+                <div class="sequence-step-title">마지막 리마인드</div>
+                <div class="sequence-step-desc">여전히 응답이 없는 경우 마지막 리마인드 이메일 발송</div>
+                <div class="sequence-step-delay">&#x23F0; 5일 후 자동 발송</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">체험단 모집 시퀀스</h2>
+            <span class="status-badge scraped">비활성</span>
+          </div>
+          <div class="sequence-steps">
+            <div class="sequence-step">
+              <div class="sequence-step-number">1</div>
+              <div class="sequence-step-content">
+                <div class="sequence-step-title">체험단 초대 발송</div>
+                <div class="sequence-step-desc">체험단 모집 안내 템플릿으로 초대 이메일 발송</div>
+              </div>
+            </div>
+            <div class="sequence-step">
+              <div class="sequence-step-number">2</div>
+              <div class="sequence-step-content">
+                <div class="sequence-step-title">참여 확인 요청</div>
+                <div class="sequence-step-desc">미응답자에게 참여 의사 확인 메일 발송</div>
+                <div class="sequence-step-delay">&#x23F0; 2일 후 자동 발송</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Crawling Jobs ========== -->
+      <div class="page" id="page-jobs">
+        <div class="page-header">
+          <div>
+            <h2>크롤링 작업</h2>
+            <p class="page-header-sub">리드 수집을 위한 크롤링 작업을 관리하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <button class="btn btn-primary"><span>&#x1F50D;</span> 새 크롤링 시작</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>대상</th>
+                  <th>상태</th>
+                  <th>발견 리드</th>
+                  <th>진행률</th>
+                  <th>시작 시간</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="color:var(--gray-400);">#45</td>
+                  <td>유튜브 테크 채널</td>
+                  <td><span class="status-badge contacted" style="background:#eff6ff;">&#x25CF; 수집 중</span></td>
+                  <td>34</td>
+                  <td>
+                    <div class="progress-bar" style="width:120px; display:inline-block; vertical-align:middle;">
+                      <div class="progress-fill" style="width:67%;"></div>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500); margin-left:8px;">67%</span>
+                  </td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">오늘 14:30</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--gray-400);">#44</td>
+                  <td>유튜브 뷰티 채널</td>
+                  <td><span class="status-badge contacted" style="background:#eff6ff;">&#x25CF; 수집 중</span></td>
+                  <td>12</td>
+                  <td>
+                    <div class="progress-bar" style="width:120px; display:inline-block; vertical-align:middle;">
+                      <div class="progress-fill" style="width:23%;"></div>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500); margin-left:8px;">23%</span>
+                  </td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">오늘 14:15</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--gray-400);">#43</td>
+                  <td>인스타 패션 인플루언서</td>
+                  <td><span class="status-badge contacted" style="background:#eff6ff;">&#x25CF; 수집 중</span></td>
+                  <td>8</td>
+                  <td>
+                    <div class="progress-bar" style="width:120px; display:inline-block; vertical-align:middle;">
+                      <div class="progress-fill" style="width:15%;"></div>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500); margin-left:8px;">15%</span>
+                  </td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">오늘 13:50</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--gray-400);">#42</td>
+                  <td>인스타 뷰티 인플루언서</td>
+                  <td><span class="status-badge verified">완료</span></td>
+                  <td>128</td>
+                  <td>
+                    <div class="progress-bar" style="width:120px; display:inline-block; vertical-align:middle;">
+                      <div class="progress-fill success" style="width:100%;"></div>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500); margin-left:8px;">100%</span>
+                  </td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">오늘 10:20</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--gray-400);">#41</td>
+                  <td>블로그 리뷰어 검색</td>
+                  <td><span class="status-badge" style="background:var(--gray-100); color:var(--gray-500);">대기 중</span></td>
+                  <td>-</td>
+                  <td><span style="font-size:0.8rem; color:var(--gray-400);">대기</span></td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">-</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--gray-400);">#40</td>
+                  <td>유튜브 먹방 채널</td>
+                  <td><span class="status-badge verified">완료</span></td>
+                  <td>87</td>
+                  <td>
+                    <div class="progress-bar" style="width:120px; display:inline-block; vertical-align:middle;">
+                      <div class="progress-fill success" style="width:100%;"></div>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500); margin-left:8px;">100%</span>
+                  </td>
+                  <td style="color:var(--gray-400); font-size:0.8rem;">어제 16:45</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Research Tools ========== -->
+      <div class="page" id="page-research">
+        <div class="page-header">
+          <div>
+            <h2>리서치 도구</h2>
+            <p class="page-header-sub">리드 발굴을 위한 다양한 리서치 도구</p>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F50D;</span>
+            <h3>URL 크롤링</h3>
+            <p>특정 웹사이트 URL을 입력하면 해당 페이지에서 이메일 주소를 자동으로 수집합니다.</p>
+            <button class="btn btn-primary" style="margin-top:16px;">사용하기</button>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F4F9;</span>
+            <h3>YouTube 채널 검색</h3>
+            <p>YouTube 채널 URL을 입력하면 채널 정보와 연락처 이메일을 자동으로 찾아줍니다.</p>
+            <button class="btn btn-primary" style="margin-top:16px;">사용하기</button>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F4F7;</span>
+            <h3>Instagram 프로필 검색</h3>
+            <p>Instagram 프로필에서 비즈니스 이메일과 연락처 정보를 수집합니다.</p>
+            <button class="btn btn-primary" style="margin-top:16px;">사용하기</button>
+          </div>
+          <div class="help-card" style="opacity:0.6;">
+            <span class="help-card-icon">&#x1F310;</span>
+            <h3>대량 URL 검색</h3>
+            <p>여러 URL을 한 번에 입력하여 대량으로 리드를 수집할 수 있습니다.</p>
+            <button class="btn btn-secondary" style="margin-top:16px;">준비 중</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Reports ========== -->
+      <div class="page" id="page-reports">
+        <div class="page-header">
+          <div>
+            <h2>리포트</h2>
+            <p class="page-header-sub">아웃바운드 활동에 대한 상세 리포트를 확인하세요</p>
+          </div>
+          <div class="page-header-actions">
+            <select class="select-sm">
+              <option>최근 7일</option>
+              <option>최근 30일</option>
+              <option>최근 90일</option>
+            </select>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--primary-50);color:var(--primary-600);">&#x2709;&#xFE0F;</span>
+            </div>
+            <div class="metric-value">3,582</div>
+            <div class="metric-label">총 발송</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--success-light);color:var(--success);">&#x1F4E8;</span>
+            </div>
+            <div class="metric-value">2,340</div>
+            <div class="metric-label">오픈 (65.3%)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--warning-light);color:var(--warning);">&#x1F4AC;</span>
+            </div>
+            <div class="metric-value">878</div>
+            <div class="metric-label">응답 (24.5%)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--danger-light);color:var(--danger);">&#x26A0;&#xFE0F;</span>
+            </div>
+            <div class="metric-value">42</div>
+            <div class="metric-label">바운스 (1.2%)</div>
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">일별 발송 추이</h2>
+              </div>
+              <div class="chart-container">
+                <div class="chart-bars">
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:55%;"></div><div class="chart-bar opened" style="height:35%;"></div></div><span class="chart-day">3/10</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:72%;"></div><div class="chart-bar opened" style="height:50%;"></div></div><span class="chart-day">3/11</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:85%;"></div><div class="chart-bar opened" style="height:58%;"></div></div><span class="chart-day">3/12</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:60%;"></div><div class="chart-bar opened" style="height:42%;"></div></div><span class="chart-day">3/13</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:90%;"></div><div class="chart-bar opened" style="height:65%;"></div></div><span class="chart-day">3/14</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:78%;"></div><div class="chart-bar opened" style="height:52%;"></div></div><span class="chart-day">3/15</span></div>
+                  <div class="chart-bar-group"><div class="chart-bar-stack"><div class="chart-bar sent" style="height:40%;"></div><div class="chart-bar opened" style="height:28%;"></div></div><span class="chart-day">3/16</span></div>
+                </div>
+                <div class="chart-legend">
+                  <span class="legend-item"><span class="legend-dot" style="background:var(--primary-600);"></span>발송</span>
+                  <span class="legend-item"><span class="legend-dot" style="background:var(--success);"></span>오픈</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">캠페인별 성과</h2>
+              </div>
+              <div style="padding:16px 20px;">
+                <div class="job-status-item">
+                  <div class="job-status-info"><span style="font-weight:600;">유튜버 협업</span></div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:65%;"></div></div>
+                  <span class="job-status-meta">오픈률 65% · 응답률 17%</span>
+                </div>
+                <div class="job-status-item">
+                  <div class="job-status-info"><span style="font-weight:600;">인스타 뷰티</span></div>
+                  <div class="progress-bar"><div class="progress-fill success" style="width:71%;"></div></div>
+                  <span class="job-status-meta">오픈률 71% · 응답률 18%</span>
+                </div>
+                <div class="job-status-item">
+                  <div class="job-status-info"><span style="font-weight:600;">신제품 런칭</span></div>
+                  <div class="progress-bar"><div class="progress-fill success" style="width:81%;"></div></div>
+                  <span class="job-status-meta">오픈률 81% · 응답률 26%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Performance ========== -->
+      <div class="page" id="page-performance">
+        <div class="page-header">
+          <div>
+            <h2>성과 분석</h2>
+            <p class="page-header-sub">전체 아웃바운드 마케팅 성과를 한눈에 파악하세요</p>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--primary-50);color:var(--primary-600);">&#x1F3AF;</span>
+              <span class="metric-trend up">&#x2191; 15%</span>
+            </div>
+            <div class="metric-value">24.5%</div>
+            <div class="metric-label">전체 응답률</div>
+            <div class="metric-sub">업계 평균 18%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--success-light);color:var(--success);">&#x1F91D;</span>
+              <span class="metric-trend up">&#x2191; 23%</span>
+            </div>
+            <div class="metric-value">58</div>
+            <div class="metric-label">성사된 협업</div>
+            <div class="metric-sub">이번 달</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--warning-light);color:var(--warning);">&#x23F1;</span>
+              <span class="metric-trend down">&#x2193; 8%</span>
+            </div>
+            <div class="metric-value">2.3일</div>
+            <div class="metric-label">평균 응답 시간</div>
+            <div class="metric-sub">지난 달 2.5일</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon" style="background:var(--purple-light);color:var(--purple);">&#x1F4B0;</span>
+              <span class="metric-trend up">&#x2191; 32%</span>
+            </div>
+            <div class="metric-value">&#x20A9;12.4M</div>
+            <div class="metric-label">예상 매출 기여</div>
+            <div class="metric-sub">이번 분기</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">플랫폼별 성과 비교</h2>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>플랫폼</th>
+                  <th>수집 리드</th>
+                  <th>발송</th>
+                  <th>오픈률</th>
+                  <th>응답률</th>
+                  <th>협업 성사</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="platform-badge youtube">YouTube</span></td>
+                  <td>523</td>
+                  <td>412</td>
+                  <td><span class="confidence high">72%</span></td>
+                  <td><span class="confidence high">28%</span></td>
+                  <td>32</td>
+                </tr>
+                <tr>
+                  <td><span class="platform-badge instagram">Instagram</span></td>
+                  <td>489</td>
+                  <td>380</td>
+                  <td><span class="confidence high">68%</span></td>
+                  <td><span class="confidence mid">22%</span></td>
+                  <td>18</td>
+                </tr>
+                <tr>
+                  <td><span class="platform-badge web">Web/블로그</span></td>
+                  <td>235</td>
+                  <td>198</td>
+                  <td><span class="confidence mid">55%</span></td>
+                  <td><span class="confidence mid">18%</span></td>
+                  <td>8</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Settings ========== -->
+      <div class="page" id="page-settings">
+        <div class="page-header">
+          <div>
+            <h2>설정</h2>
+            <p class="page-header-sub">계정 및 연동 설정을 관리하세요</p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-header">&#x2709;&#xFE0F; Gmail 연동</div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>연결 상태</span>
+              <span>user@gmail.com</span>
+            </div>
+            <span class="status-badge verified">연결됨</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>일일 발송 한도</span>
+              <span>하루 최대 500건까지 발송할 수 있습니다</span>
+            </div>
+            <span style="font-weight:600; color:var(--gray-900);">500건</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>발송 간격</span>
+              <span>이메일 사이의 대기 시간을 설정합니다</span>
+            </div>
+            <select class="select-sm">
+              <option>30초</option>
+              <option selected>1분</option>
+              <option>2분</option>
+              <option>5분</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-header">&#x1F464; 프로필</div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>이름</span>
+              <span>발신자 이름으로 사용됩니다</span>
+            </div>
+            <span style="color:var(--gray-700);">김건희</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>회사명</span>
+              <span>이메일 템플릿에서 {company}로 사용됩니다</span>
+            </div>
+            <span style="color:var(--gray-700);">Outbound Corp.</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-header">&#x1F514; 알림</div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>새 응답 알림</span>
+              <span>리드에게서 답변이 오면 알림을 받습니다</span>
+            </div>
+            <button class="toggle-switch on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>크롤링 완료 알림</span>
+              <span>크롤링 작업이 완료되면 알림을 받습니다</span>
+            </div>
+            <button class="toggle-switch on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>일일 리포트</span>
+              <span>매일 아침 전날의 성과 요약을 받습니다</span>
+            </div>
+            <button class="toggle-switch" onclick="this.classList.toggle('on')"></button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-header">&#x1F6E1;&#xFE0F; 크롤링 설정</div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>요청 간격</span>
+              <span>크롤링 요청 사이의 대기 시간</span>
+            </div>
+            <select class="select-sm">
+              <option>1초</option>
+              <option selected>2초</option>
+              <option>3초</option>
+              <option>5초</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>최대 탐색 깊이</span>
+              <span>링크를 따라가는 최대 깊이</span>
+            </div>
+            <select class="select-sm">
+              <option>1단계</option>
+              <option>2단계</option>
+              <option selected>3단계</option>
+              <option>5단계</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-label">
+              <span>최대 재시도 횟수</span>
+              <span>실패한 요청을 다시 시도하는 횟수</span>
+            </div>
+            <select class="select-sm">
+              <option>1회</option>
+              <option>2회</option>
+              <option selected>3회</option>
+              <option>5회</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== PAGE: Help ========== -->
+      <div class="page" id="page-help">
+        <div class="page-header">
+          <div>
+            <h2>도움말</h2>
+            <p class="page-header-sub">Outbound Marketing CRM 사용 가이드</p>
+          </div>
+        </div>
+        <div class="help-grid">
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F680;</span>
+            <h3>시작하기</h3>
+            <p>처음 사용하시나요? 기본 설정부터 첫 캠페인까지 단계별로 안내합니다.</p>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F50D;</span>
+            <h3>리드 수집 방법</h3>
+            <p>크롤링 도구를 사용하여 YouTube, Instagram 등에서 리드를 수집하는 방법을 알아보세요.</p>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x2709;&#xFE0F;</span>
+            <h3>이메일 캠페인 만들기</h3>
+            <p>효과적인 아웃바운드 이메일 캠페인을 만들고 발송하는 방법을 안내합니다.</p>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F517;</span>
+            <h3>Gmail 연동하기</h3>
+            <p>Gmail 계정을 연결하여 이메일을 발송하고 응답을 추적하는 방법을 안내합니다.</p>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F4C4;</span>
+            <h3>템플릿 활용법</h3>
+            <p>변수를 활용한 맞춤형 이메일 템플릿을 만들고 관리하는 방법을 알아보세요.</p>
+          </div>
+          <div class="help-card">
+            <span class="help-card-icon">&#x1F4C8;</span>
+            <h3>성과 분석 보기</h3>
+            <p>리포트와 성과 분석을 통해 캠페인 효과를 측정하는 방법을 안내합니다.</p>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
   <script>
+    /* Page title mapping */
+    var pageTitles = {
+      dashboard: '대시보드',
+      leads: '리드 관리',
+      campaigns: '이메일 캠페인',
+      templates: '이메일 템플릿',
+      sequences: '시퀀스',
+      jobs: '크롤링 작업',
+      research: '리서치 도구',
+      reports: '리포트',
+      performance: '성과 분석',
+      settings: '설정',
+      help: '도움말'
+    };
+
+    /* Navigate to a page */
+    function navigateTo(pageId) {
+      /* Hide all pages */
+      document.querySelectorAll('.page').forEach(function(p) {
+        p.classList.remove('active');
+      });
+
+      /* Show target page */
+      var target = document.getElementById('page-' + pageId);
+      if (target) target.classList.add('active');
+
+      /* Update active nav item */
+      document.querySelectorAll('.nav-item').forEach(function(item) {
+        item.classList.remove('active');
+      });
+      var activeNav = document.querySelector('[data-page="' + pageId + '"]');
+      if (activeNav) activeNav.classList.add('active');
+
+      /* Update page title in topbar */
+      var titleEl = document.querySelector('.page-title');
+      if (titleEl && pageTitles[pageId]) {
+        titleEl.textContent = pageTitles[pageId];
+      }
+
+      /* Close mobile sidebar */
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').classList.remove('active');
+
+      /* Scroll to top */
+      document.querySelector('.content').scrollTop = 0;
+    }
+
+    /* Attach click handlers to nav items */
+    document.querySelectorAll('[data-page]').forEach(function(item) {
+      item.addEventListener('click', function(e) {
+        e.preventDefault();
+        navigateTo(this.getAttribute('data-page'));
+      });
+    });
+
+    /* Also handle card-link clicks that point to pages */
+    document.querySelectorAll('.card-link[href^="#"]').forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        var pageId = this.getAttribute('href').substring(1);
+        if (document.getElementById('page-' + pageId)) {
+          navigateTo(pageId);
+        }
+      });
+    });
+
+    /* Sidebar toggle for mobile */
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('active');
+    }
+
+    document.getElementById('sidebarOverlay').addEventListener('click', function() {
+      document.getElementById('sidebar').classList.remove('open');
+      this.classList.remove('active');
+    });
+  </script>
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('open');
       document.getElementById('sidebarOverlay').classList.toggle('active');
