@@ -14,8 +14,8 @@ function AppContent() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Creator Lead Researcher</h1>
-        <p>Multi-platform creator contact discovery</p>
+        <h1>크리에이터 연락처 수집기</h1>
+        <p>유튜브, 인스타그램 등 크리에이터의 공개 이메일을 자동으로 찾아드립니다</p>
       </header>
 
       <div className="app-layout">
@@ -27,7 +27,7 @@ function AppContent() {
         <main className="content">
           <div className="content-header">
             <h2>
-              {selectedJobId ? `Job #${selectedJobId} Leads` : 'All Leads'}
+              {selectedJobId ? `작업 #${selectedJobId} 결과` : '전체 수집 결과'}
             </h2>
             <CsvDownloadButton jobId={selectedJobId} />
           </div>

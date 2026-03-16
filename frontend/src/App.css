@@ -129,6 +129,60 @@ body {
   cursor: not-allowed;
 }
 
+.form-guide {
+  font-size: 0.82rem;
+  color: #6b7280;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.help-text {
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.advanced-toggle {
+  margin: 8px 0;
+}
+
+.btn-toggle {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 4px 0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-toggle:hover {
+  color: #5a6fd6;
+}
+
+.toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 0.7rem;
+}
+
+.toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+.advanced-settings {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
 /* Job List */
 .job-list h3 {
   font-size: 1rem;
@@ -253,4 +307,22 @@ body {
   color: #dc2626;
   font-size: 0.85rem;
   margin-top: 8px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.empty-state p:first-child {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #4a5568;
+}
+
+.empty-state .muted {
+  font-size: 0.9rem;
 }

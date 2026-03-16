@@ -15,12 +15,12 @@ export default function JobList({ selectedJobId, onSelectJob }: Props) {
     refetchInterval: 5000,
   })
 
-  if (isLoading) return <p>Loading jobs...</p>
+  if (isLoading) return <p>불러오는 중...</p>
 
   return (
     <div className="job-list">
-      <h3>Jobs</h3>
-      {!jobs?.length && <p className="muted">No jobs yet</p>}
+      <h3>수집 작업 목록</h3>
+      {!jobs?.length && <p className="muted">아직 수집 작업이 없습니다</p>}
       {jobs?.map((job: Job) => (
         <div
           key={job.id}
@@ -28,16 +28,16 @@ export default function JobList({ selectedJobId, onSelectJob }: Props) {
           onClick={() => onSelectJob(selectedJobId === job.id ? null : job.id)}
         >
           <div className="job-header">
-            <span>#{job.id}</span>
+            <span>작업 #{job.id}</span>
             <StatusBadge status={job.status} />
           </div>
           <div className="job-meta">
-            <span>{job.targets.length} URL(s)</span>
-            <span>{job.total_leads_found} leads</span>
+            <span>{job.targets.length}개 대상</span>
+            <span>{job.total_leads_found}건 수집</span>
           </div>
           <div className="job-meta">
             <span className="muted">
-              {new Date(job.inserted_at).toLocaleString()}
+              {new Date(job.inserted_at).toLocaleString('ko-KR')}
             </span>
           </div>
           {(job.status === 'pending' || job.status === 'running') && (
@@ -48,7 +48,7 @@ export default function JobList({ selectedJobId, onSelectJob }: Props) {
                 cancelJob(job.id)
               }}
             >
-              Cancel
+              중단
             </button>
           )}
         </div>

@@ -9,7 +9,7 @@ export default function CsvDownloadButton({ jobId }: Props) {
 
   return (
     <a href={url} download className="btn-export">
-      Download CSV
+      엑셀 파일로 내려받기
     </a>
   )
 }
