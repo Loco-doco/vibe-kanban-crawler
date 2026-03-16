@@ -2455,16 +2455,24 @@
       document.getElementById('sidebar').classList.remove('open');
       this.classList.remove('active');
     });
-  </script>
-    function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('open');
-      document.getElementById('sidebarOverlay').classList.toggle('active');
+
+    /* Hash navigation support (browser back/forward + direct URL access) */
+    function handleHash() {
+      var hash = window.location.hash.substring(1);
+      if (hash && document.getElementById('page-' + hash)) {
+        navigateTo(hash);
+      }
     }
 
-    document.getElementById('sidebarOverlay').addEventListener('click', function() {
-      document.getElementById('sidebar').classList.remove('open');
-      this.classList.remove('active');
-    });
+    /* Update URL hash on navigation */
+    var origNavigateTo = navigateTo;
+    navigateTo = function(pageId) {
+      origNavigateTo(pageId);
+      history.pushState(null, '', '#' + pageId);
+    };
+
+    window.addEventListener('popstate', handleHash);
+    handleHash();
   </script>
 </body>
 </html>
