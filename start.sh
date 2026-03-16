@@ -39,22 +39,27 @@ check_requirement "node" "Node.js"
 check_requirement "elixir" "Elixir"
 check_requirement "python3" "Python 3"
 
-# ─── 포트 충돌 확인 ──────────────────────────────────────────
-check_port() {
+# ─── 포트 충돌 해소 ──────────────────────────────────────────
+free_port() {
   local port=$1
   local name=$2
-  if lsof -iTCP:"$port" -sTCP:LISTEN -t &>/dev/null; then
-    echo ""
-    echo -e "  ${RED}[오류]${NC} 포트 ${YELLOW}$port${NC} 이(가) 이미 사용 중입니다. ($name)"
-    echo -e "  다른 프로세스가 해당 포트를 점유하고 있습니다."
-    echo -e "  확인: ${DIM}lsof -iTCP:$port -sTCP:LISTEN${NC}"
-    echo ""
-    exit 1
+  local pids
+  pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    echo -e "  ${YELLOW}[알림]${NC} 포트 ${YELLOW}$port${NC} ($name) 이(가) 사용 중 — 기존 프로세스를 종료합니다."
+    echo "$pids" | xargs kill 2>/dev/null || true
+    sleep 1
+    # 아직 살아있으면 강제 종료
+    pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      sleep 1
+    fi
   fi
 }
 
-check_port $BACKEND_PORT "백엔드"
-check_port $FRONTEND_PORT "프론트엔드"
+free_port $BACKEND_PORT "백엔드"
+free_port $FRONTEND_PORT "프론트엔드"
 
 # ─── 시작 ────────────────────────────────────────────────────
 echo ""
