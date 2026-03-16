@@ -39,27 +39,44 @@ check_requirement "node" "Node.js"
 check_requirement "elixir" "Elixir"
 check_requirement "python3" "Python 3"
 
-# ─── 포트 충돌 해소 ──────────────────────────────────────────
-free_port() {
+# ─── 포트 충돌 확인 ──────────────────────────────────────────
+check_port() {
   local port=$1
   local name=$2
   local pids
   pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
   if [ -n "$pids" ]; then
-    echo -e "  ${YELLOW}[알림]${NC} 포트 ${YELLOW}$port${NC} ($name) 이(가) 사용 중 — 기존 프로세스를 종료합니다."
+    local proc_info
+    proc_info=$(lsof -iTCP:"$port" -sTCP:LISTEN -P 2>/dev/null | tail -1 || true)
+    echo ""
+    echo -e "  ${YELLOW}[알림]${NC} 포트 ${YELLOW}$port${NC} ($name) 이(가) 이미 사용 중입니다."
+    echo -e "  ${DIM}  $proc_info${NC}"
+    echo ""
+    echo -n -e "  기존 프로세스를 종료하고 계속할까요? (Y/n, 5초 후 자동 진행) "
+    if read -t 5 -r answer; then
+      answer=${answer:-Y}
+    else
+      answer="Y"
+      echo ""
+    fi
+    if [[ "$answer" =~ ^[Nn]$ ]]; then
+      echo -e "  ${RED}중단합니다.${NC}"
+      echo ""
+      exit 1
+    fi
     echo "$pids" | xargs kill 2>/dev/null || true
     sleep 1
-    # 아직 살아있으면 강제 종료
     pids=$(lsof -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)
     if [ -n "$pids" ]; then
       echo "$pids" | xargs kill -9 2>/dev/null || true
       sleep 1
     fi
+    echo -e "  ${GREEN}[완료]${NC} 포트 $port 정리 완료."
   fi
 }
 
-free_port $BACKEND_PORT "백엔드"
-free_port $FRONTEND_PORT "프론트엔드"
+check_port $BACKEND_PORT "백엔드"
+check_port $FRONTEND_PORT "프론트엔드"
 
 # ─── 시작 ────────────────────────────────────────────────────
 echo ""
