@@ -8,6 +8,7 @@ defmodule LeadResearcherWeb.LeadJSON do
     %{
       id: lead.id,
       email: lead.email,
+      email_verified: lead.email_verified || false,
       platform: lead.platform,
       channel_name: lead.channel_name,
       channel_url: lead.channel_url,

@@ -5,7 +5,6 @@ interface LeadParams {
   job_id?: number
   platform?: string
   status?: string
-  min_confidence?: number
   search?: string
   sort?: string
   order?: string
@@ -18,8 +17,18 @@ export async function getLeads(params: LeadParams = {}): Promise<Lead[]> {
   return data.data
 }
 
-export async function getJobLeads(jobId: number, params: LeadParams = {}): Promise<Lead[]> {
-  return getLeads({ ...params, job_id: jobId })
+export async function getLead(id: number): Promise<Lead> {
+  const { data } = await api.get<{ data: Lead }>(`/leads/${id}`)
+  return data.data
+}
+
+export async function updateLead(id: number, lead: Partial<Lead>): Promise<Lead> {
+  const { data } = await api.put<{ data: Lead }>(`/leads/${id}`, { lead })
+  return data.data
+}
+
+export async function deleteLead(id: number): Promise<void> {
+  await api.delete(`/leads/${id}`)
 }
 
 export function exportCsvUrl(params: LeadParams = {}): string {

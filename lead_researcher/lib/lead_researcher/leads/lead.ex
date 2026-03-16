@@ -14,6 +14,7 @@ defmodule LeadResearcher.Leads.Lead do
     field :last_contacted_at, :utc_datetime
     field :notes, :string
     field :raw_data, :string
+    field :email_verified, :boolean, default: false
 
     belongs_to :job, LeadResearcher.Jobs.Job
 
@@ -25,11 +26,11 @@ defmodule LeadResearcher.Leads.Lead do
     |> cast(attrs, [
       :email, :platform, :channel_name, :channel_url, :evidence_link,
       :confidence_score, :subscriber_count, :status, :last_contacted_at,
-      :notes, :raw_data, :job_id
+      :notes, :raw_data, :job_id, :email_verified
     ])
     |> validate_required([:evidence_link, :job_id])
     |> validate_inclusion(:status, ~w(scraped verified contacted replied bounced manual_review))
-    |> validate_inclusion(:platform, ~w(youtube instagram web unknown))
+    |> validate_inclusion(:platform, ~w(youtube instagram class101 liveklass web unknown))
     |> foreign_key_constraint(:job_id)
   end
 end

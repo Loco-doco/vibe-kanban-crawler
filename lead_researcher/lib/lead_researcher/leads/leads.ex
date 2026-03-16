@@ -134,4 +134,8 @@ defmodule LeadResearcher.Leads do
   defp parse_float(val) when is_integer(val), do: val / 1
   defp parse_float(val) when is_binary(val), do: String.to_float(val)
   defp parse_float(_), do: 0.0
+
+  def delete_lead(%Lead{} = lead) do
+    Repo.delete(lead)
+  end
 end

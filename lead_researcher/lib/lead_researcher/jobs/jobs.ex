@@ -22,8 +22,20 @@ defmodule LeadResearcher.Jobs do
         _ -> "[]"
       end
 
+    category_tags =
+      case Map.get(attrs, "category_tags") || Map.get(attrs, :category_tags) do
+        t when is_list(t) -> Jason.encode!(t)
+        t when is_binary(t) -> t
+        _ -> nil
+      end
+
+    attrs =
+      attrs
+      |> Map.put("targets", targets)
+      |> Map.put("category_tags", category_tags)
+
     %Job{}
-    |> Job.changeset(Map.put(attrs, "targets", targets))
+    |> Job.changeset(attrs)
     |> Repo.insert()
   end
 
