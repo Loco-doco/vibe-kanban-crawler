@@ -20,3 +20,15 @@ export async function cancelJob(id: number): Promise<Job> {
   const { data } = await api.post<{ data: Job }>(`/jobs/${id}/cancel`)
   return data.data
 }
+
+export interface ParsedPrompt {
+  keywords: string[]
+  category_tags: string[]
+  subscriber_min: number | null
+  subscriber_max: number | null
+}
+
+export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {
+  const { data } = await api.post<{ data: ParsedPrompt }>('/parse-prompt', { prompt })
+  return data.data
+}

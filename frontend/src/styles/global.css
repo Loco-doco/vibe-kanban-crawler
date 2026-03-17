@@ -1056,6 +1056,90 @@ body {
   line-height: 1.4;
 }
 
+/* ===== Prompt Examples ===== */
+.prompt-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.prompt-example-chip {
+  padding: 6px 12px;
+  border: 1px dashed var(--gray-300);
+  border-radius: 8px;
+  background: var(--gray-50);
+  color: var(--gray-600);
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.prompt-example-chip:hover {
+  border-color: var(--primary-400);
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+/* ===== Parsed Result ===== */
+.parsed-result {
+  background: var(--primary-50);
+  border: 1px solid var(--primary-200);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.parsed-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.parsed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.parsed-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  min-width: 70px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.parsed-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.parsed-value-text {
+  font-size: 0.85rem;
+  color: var(--gray-700);
+  padding-top: 2px;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--gray-500);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 8px;
+  text-decoration: underline;
+}
+
+.btn-text:hover {
+  color: var(--primary-600);
+}
+
 /* ===== Input with Unit ===== */
 .input-with-unit {
   display: flex;

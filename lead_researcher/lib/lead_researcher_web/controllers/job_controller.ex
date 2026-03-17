@@ -28,6 +28,18 @@ defmodule LeadResearcherWeb.JobController do
     render(conn, :show, job: job)
   end
 
+  def parse_prompt(conn, %{"prompt" => prompt}) do
+    case LeadResearcher.PromptParser.parse(prompt) do
+      {:ok, result} ->
+        json(conn, %{data: result})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: reason})
+    end
+  end
+
   def cancel(conn, %{"id" => id}) do
     LeadResearcher.Jobs.JobQueue.cancel(String.to_integer(id))
 

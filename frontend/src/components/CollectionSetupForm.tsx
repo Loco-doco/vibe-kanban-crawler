@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createJob } from '../api/jobs'
-import { SUGGESTED_CATEGORIES } from '../types'
+import { createJob, parsePrompt, type ParsedPrompt } from '../api/jobs'
 
 interface Props {
   onCreated?: () => void
@@ -25,68 +24,77 @@ const EFFORT_LEVELS = [
   },
 ]
 
+const EXAMPLE_PROMPTS = [
+  '뷰티 유튜버 중에서 구독자 5만~50만 사이, 스킨케어 리뷰 위주로 찾아줘',
+  '요리 레시피 채널인데 구독자 1만 이상인 곳',
+  '자기계발, 독서 관련 유튜버',
+  '부동산 투자, 재테크 관련 크리에이터 중 소규모 채널',
+]
+
 export default function CollectionSetupForm({ onCreated }: Props) {
-  const [keywordsText, setKeywordsText] = useState('')
+  const [prompt, setPrompt] = useState('')
   const [targetCount, setTargetCount] = useState('30')
   const [searchEffort, setSearchEffort] = useState(2)
   const [showOptions, setShowOptions] = useState(false)
   const [label, setLabel] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [customCategory, setCustomCategory] = useState('')
-  const [subscriberMin, setSubscriberMin] = useState('')
-  const [subscriberMax, setSubscriberMax] = useState('')
   const [maxRetries, setMaxRetries] = useState('3')
   const [delayMs, setDelayMs] = useState('2000')
+  const [parsedResult, setParsedResult] = useState<ParsedPrompt | null>(null)
+  const [parseError, setParseError] = useState('')
+  const [step, setStep] = useState<'input' | 'parsing' | 'confirm'>('input')
 
   const queryClient = useQueryClient()
 
-  const mutation = useMutation({
+  const parseMutation = useMutation({
+    mutationFn: parsePrompt,
+    onSuccess: (result) => {
+      setParsedResult(result)
+      setParseError('')
+      setStep('confirm')
+    },
+    onError: (err: Error) => {
+      setParseError(err.message)
+      setStep('input')
+    },
+  })
+
+  const createMutation = useMutation({
     mutationFn: createJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      setKeywordsText('')
+      setPrompt('')
       setTargetCount('30')
       setSearchEffort(2)
       setLabel('')
-      setSelectedCategories([])
-      setCustomCategory('')
-      setSubscriberMin('')
-      setSubscriberMax('')
       setMaxRetries('3')
       setDelayMs('2000')
+      setParsedResult(null)
+      setStep('input')
       onCreated?.()
     },
   })
 
-  const toggleCategory = (cat: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
-    )
-  }
-
-  const addCustomCategory = () => {
-    const val = customCategory.trim()
-    if (!val || selectedCategories.includes(val)) return
-    setSelectedCategories((prev) => [...prev, val])
-    setCustomCategory('')
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAnalyze = (e: React.FormEvent) => {
     e.preventDefault()
-    const keywords = keywordsText.split(',').map((k) => k.trim()).filter(Boolean)
-    if (keywords.length === 0) return
+    if (!prompt.trim()) return
+    setStep('parsing')
+    parseMutation.mutate(prompt.trim())
+  }
 
-    mutation.mutate({
+  const handleStartCrawl = () => {
+    if (!parsedResult) return
+
+    createMutation.mutate({
       job: {
         label: label || undefined,
         mode: 'discovery',
         targets: ['discovery'],
-        keywords,
+        keywords: parsedResult.keywords,
         platform: 'youtube',
-        category_tags: selectedCategories.length > 0 ? selectedCategories : undefined,
+        category_tags: parsedResult.category_tags.length > 0 ? parsedResult.category_tags : undefined,
         target_count: targetCount ? Number(targetCount) : 30,
-        subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
-        subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
+        subscriber_min: parsedResult.subscriber_min ?? undefined,
+        subscriber_max: parsedResult.subscriber_max ?? undefined,
         max_retries: Number(maxRetries) || 3,
         delay_ms: Number(delayMs) || 2000,
         max_depth: searchEffort,
@@ -94,30 +102,90 @@ export default function CollectionSetupForm({ onCreated }: Props) {
     })
   }
 
-  const keywordCount = keywordsText.split(',').map((k) => k.trim()).filter(Boolean).length
+  const handleBack = () => {
+    setParsedResult(null)
+    setStep('input')
+  }
+
+  const isProcessing = parseMutation.isPending || createMutation.isPending
 
   return (
-    <form onSubmit={handleSubmit} className="setup-form">
+    <form onSubmit={handleAnalyze} className="setup-form">
       <div className="mode-desc">
-        검색 키워드를 입력하면 YouTube에서 크리에이터를 자동으로 찾아 연락처를 수집합니다
+        찾고 싶은 크리에이터를 자유롭게 설명하면, AI가 분석해서 자동으로 검색합니다
       </div>
 
-      {/* 필수 입력 */}
+      {/* 프롬프트 입력 */}
       <div className="setup-section">
         <label className="setup-label">
-          검색 키워드
-          {keywordCount > 0 && <span className="setup-url-count">{keywordCount}개 키워드</span>}
+          어떤 크리에이터를 찾고 싶나요?
           <textarea
             className="setup-textarea"
-            value={keywordsText}
-            onChange={(e) => setKeywordsText(e.target.value)}
-            rows={3}
-            placeholder={'쉼표로 구분하여 입력\n예: 뷰티 유튜버, 화장품 리뷰, 스킨케어 추천'}
-            required
+            value={prompt}
+            onChange={(e) => { setPrompt(e.target.value); if (step === 'confirm') setStep('input') }}
+            rows={4}
+            placeholder="예: 뷰티 유튜버 중에서 구독자 5만~50만 사이, 스킨케어 리뷰 위주로 찾아줘"
+            disabled={step === 'parsing'}
           />
-          <span className="setup-help">쉼표(,)로 여러 키워드를 구분하세요. 각 키워드로 크리에이터를 검색합니다</span>
         </label>
+        {step === 'input' && !prompt && (
+          <div className="prompt-examples">
+            {EXAMPLE_PROMPTS.map((ex, i) => (
+              <button
+                key={i}
+                type="button"
+                className="prompt-example-chip"
+                onClick={() => setPrompt(ex)}
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
+      {/* AI 분석 결과 */}
+      {step === 'confirm' && parsedResult && (
+        <div className="setup-section parsed-result">
+          <h4 className="setup-section-title">AI 분석 결과</h4>
+          <div className="parsed-tags">
+            <div className="parsed-row">
+              <span className="parsed-label">검색 키워드</span>
+              <div className="parsed-values">
+                {parsedResult.keywords.map((kw, i) => (
+                  <span key={i} className="category-chip active">{kw}</span>
+                ))}
+              </div>
+            </div>
+            {parsedResult.category_tags.length > 0 && (
+              <div className="parsed-row">
+                <span className="parsed-label">카테고리</span>
+                <div className="parsed-values">
+                  {parsedResult.category_tags.map((cat, i) => (
+                    <span key={i} className="category-chip">{cat}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(parsedResult.subscriber_min || parsedResult.subscriber_max) && (
+              <div className="parsed-row">
+                <span className="parsed-label">구독자 범위</span>
+                <span className="parsed-value-text">
+                  {parsedResult.subscriber_min ? `${(parsedResult.subscriber_min).toLocaleString()}명` : '제한 없음'}
+                  {' ~ '}
+                  {parsedResult.subscriber_max ? `${(parsedResult.subscriber_max).toLocaleString()}명` : '제한 없음'}
+                </span>
+              </div>
+            )}
+          </div>
+          <button type="button" className="btn-text" onClick={handleBack}>
+            다시 입력하기
+          </button>
+        </div>
+      )}
+
+      {/* 수집 설정 */}
+      <div className="setup-section">
         <div className="setup-row-2">
           <label className="setup-label">
             수집 목표 수
@@ -152,7 +220,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         </div>
       </div>
 
-      {/* 추가 옵션 (접을 수 있는 섹션) */}
+      {/* 추가 옵션 */}
       <button
         type="button"
         className="btn-toggle"
@@ -174,66 +242,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
               placeholder="예: 3월 뷰티 유튜버 탐색"
             />
           </label>
-
-          <div className="setup-label" style={{ marginTop: 12 }}>
-            카테고리 <span className="setup-hint">(복수 선택 가능)</span>
-            <div className="category-selector">
-              {SUGGESTED_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`category-chip${selectedCategories.includes(cat) ? ' active' : ''}`}
-                  onClick={() => toggleCategory(cat)}
-                >
-                  {cat}
-                </button>
-              ))}
-              {selectedCategories.filter((c) => !SUGGESTED_CATEGORIES.includes(c)).map((c) => (
-                <span key={c} className="category-chip active custom">
-                  {c}
-                  <button type="button" className="chip-remove" onClick={() => toggleCategory(c)}>&times;</button>
-                </span>
-              ))}
-            </div>
-            <div className="inline-add">
-              <input
-                type="text"
-                className="setup-input"
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCategory() } }}
-                placeholder="직접 입력 (예: 반려동물, 게임)"
-              />
-              <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomCategory}>추가</button>
-            </div>
-            <span className="setup-help">카테고리를 선택하면 키워드와 조합하여 더 정확한 검색을 합니다</span>
-          </div>
-
-          <div className="setup-row-2" style={{ marginTop: 12 }}>
-            <label className="setup-label">
-              최소 구독자
-              <input
-                type="number"
-                className="setup-input"
-                value={subscriberMin}
-                onChange={(e) => setSubscriberMin(e.target.value)}
-                placeholder="예: 1000"
-                min={0}
-              />
-            </label>
-            <label className="setup-label">
-              최대 구독자
-              <input
-                type="number"
-                className="setup-input"
-                value={subscriberMax}
-                onChange={(e) => setSubscriberMax(e.target.value)}
-                placeholder="예: 100000"
-                min={0}
-              />
-            </label>
-          </div>
-
           <div className="setup-row-2" style={{ marginTop: 12 }}>
             <label className="setup-label">
               재시도 횟수
@@ -264,12 +272,35 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         </div>
       )}
 
-      <button type="submit" className="btn btn-primary setup-submit" disabled={mutation.isPending || keywordCount === 0}>
-        {mutation.isPending ? '탐색 생성 중...' : '크리에이터 탐색 시작'}
-      </button>
+      {/* 액션 버튼 */}
+      {step === 'confirm' && parsedResult ? (
+        <button
+          type="button"
+          className="btn btn-primary setup-submit"
+          disabled={isProcessing}
+          onClick={handleStartCrawl}
+        >
+          {createMutation.isPending ? '탐색 생성 중...' : '크리에이터 탐색 시작'}
+        </button>
+      ) : (
+        <button
+          type="submit"
+          className="btn btn-primary setup-submit"
+          disabled={isProcessing || !prompt.trim()}
+        >
+          {step === 'parsing' ? 'AI 분석 중...' : 'AI로 검색 조건 분석'}
+        </button>
+      )}
 
-      {mutation.isError && (
-        <p className="setup-error">오류가 발생했습니다: {(mutation.error as Error).message}</p>
+      {(parseError || parseMutation.isError) && (
+        <p className="setup-error">
+          {parseError || (parseMutation.error as Error).message}
+        </p>
+      )}
+      {createMutation.isError && (
+        <p className="setup-error">
+          탐색 생성 실패: {(createMutation.error as Error).message}
+        </p>
       )}
     </form>
   )
