@@ -20,6 +20,8 @@ defmodule LeadResearcher.Jobs.Job do
     field :subscriber_max, :integer
     field :extra_conditions, :string
     field :label, :string
+    field :mode, :string, default: "url"
+    field :keywords, :string
 
     has_many :leads, LeadResearcher.Leads.Lead
 
@@ -32,13 +34,31 @@ defmodule LeadResearcher.Jobs.Job do
       :targets, :status, :max_retries, :delay_ms, :max_depth,
       :total_leads_found, :error_message, :started_at, :completed_at,
       :platform, :category_tags, :target_count, :subscriber_min,
-      :subscriber_max, :extra_conditions, :label
+      :subscriber_max, :extra_conditions, :label, :mode, :keywords
     ])
     |> validate_required([:targets])
     |> validate_inclusion(:status, ~w(pending running completed failed cancelled))
+    |> validate_inclusion(:mode, ~w(url discovery))
     |> validate_number(:max_retries, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
     |> validate_number(:delay_ms, greater_than_or_equal_to: 0)
     |> validate_number(:max_depth, greater_than_or_equal_to: 1, less_than_or_equal_to: 5)
     |> validate_number(:target_count, greater_than_or_equal_to: 1)
+    |> validate_keywords_for_discovery()
+  end
+
+  defp validate_keywords_for_discovery(changeset) do
+    case get_field(changeset, :mode) do
+      "discovery" ->
+        keywords = get_field(changeset, :keywords)
+
+        if is_nil(keywords) or keywords == "" or keywords == "[]" do
+          add_error(changeset, :keywords, "검색 키워드는 필수입니다")
+        else
+          changeset
+        end
+
+      _ ->
+        changeset
+    end
   end
 end

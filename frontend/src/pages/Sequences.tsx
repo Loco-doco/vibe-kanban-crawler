@@ -1,6 +1,9 @@
+import ComingSoonBanner from '../components/ComingSoonBanner'
+
 export default function Sequences() {
   return (
     <>
+      <ComingSoonBanner />
       <div className="page-header">
         <div>
           <h2>시퀀스</h2>

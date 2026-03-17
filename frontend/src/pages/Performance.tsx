@@ -1,6 +1,9 @@
+import ComingSoonBanner from '../components/ComingSoonBanner'
+
 export default function Performance() {
   return (
     <>
+      <ComingSoonBanner />
       <div className="page-header">
         <div>
           <h2>성과 분석</h2>

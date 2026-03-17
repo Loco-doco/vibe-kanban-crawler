@@ -2,12 +2,12 @@ import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, string> = {
   '/': '대시보드',
-  '/leads': '리드 관리',
-  '/campaigns': '이메일 캠페인',
-  '/templates': '이메일 템플릿',
+  '/collection': '리드 수집',
+  '/leads': '전체 리드',
+  '/master-list': '마스터 리스트',
+  '/campaigns': '캠페인',
+  '/templates': '템플릿',
   '/sequences': '시퀀스',
-  '/jobs': '크롤링 작업',
-  '/research': '리서치 도구',
   '/reports': '리포트',
   '/performance': '성과 분석',
   '/settings': '설정',

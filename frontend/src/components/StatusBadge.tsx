@@ -26,9 +26,17 @@ const STATUS_LABELS: Record<string, string> = {
   manual_review: '직접 확인 필요',
 }
 
+const STATUS_TOOLTIPS: Record<string, string> = {
+  manual_review: '이메일을 자동으로 찾지 못했습니다. 채널 페이지에서 직접 확인이 필요합니다.',
+  scraped: '크롤링으로 수집된 이메일입니다. 발송 전 확인을 권장합니다.',
+  verified: '이메일 주소가 확인되었습니다.',
+  bounced: '이메일 발송이 실패했습니다. 주소를 다시 확인하세요.',
+}
+
 export default function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status] || '#6b7280'
   const label = STATUS_LABELS[status] || status
+  const tooltip = STATUS_TOOLTIPS[status]
 
   return (
     <span
@@ -40,7 +48,9 @@ export default function StatusBadge({ status }: { status: string }) {
         fontWeight: 600,
         color: '#fff',
         backgroundColor: color,
+        cursor: tooltip ? 'help' : undefined,
       }}
+      title={tooltip}
     >
       {label}
     </span>

@@ -9,6 +9,7 @@ defmodule LeadResearcher.Leads do
     |> maybe_filter_platform(params)
     |> maybe_filter_status(params)
     |> maybe_filter_min_confidence(params)
+    |> maybe_filter_has_email(params)
     |> maybe_search(params)
     |> apply_sort(params)
     |> limit(^parse_int(params, "limit", 50))
@@ -93,6 +94,16 @@ defmodule LeadResearcher.Leads do
   end
 
   defp maybe_filter_min_confidence(query, _), do: query
+
+  defp maybe_filter_has_email(query, %{"has_email" => "true"}) do
+    where(query, [l], not is_nil(l.email) and l.email != "")
+  end
+
+  defp maybe_filter_has_email(query, %{"has_email" => "false"}) do
+    where(query, [l], is_nil(l.email) or l.email == "")
+  end
+
+  defp maybe_filter_has_email(query, _), do: query
 
   defp maybe_search(query, %{"search" => search}) when is_binary(search) and search != "" do
     pattern = "%#{search}%"

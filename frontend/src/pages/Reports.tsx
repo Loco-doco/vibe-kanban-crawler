@@ -1,6 +1,9 @@
+import ComingSoonBanner from '../components/ComingSoonBanner'
+
 export default function Reports() {
   return (
     <>
+      <ComingSoonBanner />
       <div className="page-header">
         <div>
           <h2>리포트</h2>

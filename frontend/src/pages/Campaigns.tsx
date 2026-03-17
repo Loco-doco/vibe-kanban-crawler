@@ -1,3 +1,5 @@
+import ComingSoonBanner from '../components/ComingSoonBanner'
+
 export default function Campaigns() {
   const campaigns = [
     { status: '진행 중', statusClass: 'verified', date: '3월 10일 시작', title: '유튜버 협업 제안', desc: '테크 분야 유튜버 대상 제품 리뷰 협업 제안 캠페인. 1차 발송 완료, 2차 팔로업 진행 중.', sent: 23, open: '15건 (65%)', reply: '4건 (17%)' },
@@ -8,9 +10,10 @@ export default function Campaigns() {
 
   return (
     <>
+      <ComingSoonBanner />
       <div className="page-header">
         <div>
-          <h2>이메일 캠페인</h2>
+          <h2>캠페인</h2>
           <p className="page-header-sub">아웃바운드 이메일 캠페인을 만들고 관리하세요</p>
         </div>
         <div className="page-header-actions">
