@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMasterList, removeFromMasterList } from '../api/masterList'
 import { exportCsvUrl } from '../api/leads'
+import StatusBadge from '../components/StatusBadge'
 import type { MasterListLead } from '../types'
 import { PLATFORM_LABELS } from '../types'
 
@@ -21,12 +22,6 @@ export default function MasterList() {
 
   const handleExportCsv = () => {
     window.open(exportCsvUrl(), '_blank')
-  }
-
-  const confidenceClass = (score: number) => {
-    if (score >= 0.7) return 'high'
-    if (score >= 0.4) return 'mid'
-    return 'low'
   }
 
   const formatSubscribers = (count: number | null) => {
@@ -99,11 +94,7 @@ export default function MasterList() {
                     </td>
                     <td>{lead.channel_name || '-'}</td>
                     <td>{formatSubscribers(lead.subscriber_count)}</td>
-                    <td>
-                      <span className={`status-badge ${lead.status}`}>
-                        {lead.status}
-                      </span>
-                    </td>
+                    <td><StatusBadge status={lead.status} /></td>
                     <td style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>
                       {new Date(lead.inserted_at).toLocaleDateString('ko-KR')}
                     </td>

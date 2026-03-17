@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getLeads, exportCsvUrl } from '../api/leads'
 import StatusBadge from '../components/StatusBadge'
@@ -24,15 +24,21 @@ const PLATFORM_FILTERS = [
 
 export default function Leads() {
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [platformFilter, setPlatformFilter] = useState('')
   const [sort, setSort] = useState('confidence_score')
   const [order, setOrder] = useState('desc')
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const { data: leads, isLoading } = useQuery({
-    queryKey: ['leads', { search, status: statusFilter, platform: platformFilter, sort, order }],
+    queryKey: ['leads', { search: debouncedSearch, status: statusFilter, platform: platformFilter, sort, order }],
     queryFn: () => getLeads({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       status: statusFilter || undefined,
       platform: platformFilter || undefined,
       sort,
@@ -90,7 +96,7 @@ export default function Leads() {
         </div>
       </div>
 
-      <div className="filter-bar">
+      <div className="filter-bar" style={{ flexWrap: 'wrap' }}>
         <div className="search-input-box">
           <span style={{ color: 'var(--gray-400)', marginRight: 4 }}>{'\u{1F50E}'}</span>
           <input
@@ -109,9 +115,7 @@ export default function Leads() {
             {f.label}
           </span>
         ))}
-      </div>
-
-      <div className="filter-bar" style={{ marginTop: -12 }}>
+        <span style={{ width: 1, height: 20, background: 'var(--gray-200)', margin: '0 4px' }} />
         {PLATFORM_FILTERS.map((f) => (
           <span
             key={f.value}

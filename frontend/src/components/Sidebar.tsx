@@ -76,12 +76,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             {section.items.map((item) => (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={item.disabled ? '#' : item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `nav-item${isActive ? ' active' : ''}${item.disabled ? ' disabled' : ''}`
+                  `nav-item${!item.disabled && isActive ? ' active' : ''}${item.disabled ? ' disabled' : ''}`
                 }
-                onClick={onClose}
+                onClick={(e) => {
+                  if (item.disabled) {
+                    e.preventDefault()
+                    return
+                  }
+                  onClose()
+                }}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
