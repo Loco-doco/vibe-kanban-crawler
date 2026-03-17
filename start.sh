@@ -39,6 +39,32 @@ check_requirement "node" "Node.js"
 check_requirement "elixir" "Elixir"
 check_requirement "python3" "Python 3"
 
+# ─── 최신 코드 동기화 ────────────────────────────────────────
+if git rev-parse --is-inside-work-tree &>/dev/null; then
+  CURRENT_BRANCH=$(git branch --show-current)
+  echo ""
+  echo -e "  ${BLUE}[동기화]${NC} 최신 코드를 가져옵니다... (${CURRENT_BRANCH})"
+
+  # 로컬 변경사항 확인
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo -e "  ${YELLOW}[알림]${NC} 로컬 변경사항이 있어 동기화를 건너뜁니다."
+  else
+    BEFORE=$(git rev-parse HEAD)
+    if git pull --ff-only origin "$CURRENT_BRANCH" 2>/dev/null; then
+      AFTER=$(git rev-parse HEAD)
+      if [ "$BEFORE" != "$AFTER" ]; then
+        COMMIT_COUNT=$(git rev-list "$BEFORE".."$AFTER" --count)
+        echo -e "  ${GREEN}[완료]${NC} ${COMMIT_COUNT}개 커밋을 가져왔습니다."
+        echo -e "  ${DIM}$(git log --oneline "$BEFORE".."$AFTER" | head -5)${NC}"
+      else
+        echo -e "  ${GREEN}[완료]${NC} 이미 최신 상태입니다."
+      fi
+    else
+      echo -e "  ${YELLOW}[알림]${NC} 동기화 실패. 현재 코드로 계속 진행합니다."
+    fi
+  fi
+fi
+
 # ─── 포트 충돌 확인 ──────────────────────────────────────────
 check_port() {
   local port=$1
