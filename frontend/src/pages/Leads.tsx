@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getLeads, exportCsvUrl } from '../api/leads'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getLeads, exportCsvUrl, updateLead } from '../api/leads'
 import StatusBadge from '../components/StatusBadge'
 import type { Lead } from '../types'
 import { PLATFORM_LABELS } from '../types'
@@ -37,6 +37,19 @@ export default function Leads() {
   const [minConfidence, setMinConfidence] = useState('')
   const [sort, setSort] = useState('confidence_score')
   const [order, setOrder] = useState('desc')
+  const [editingLeadId, setEditingLeadId] = useState<number | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const queryClient = useQueryClient()
+
+  const emailMutation = useMutation({
+    mutationFn: ({ id, email }: { id: number; email: string }) =>
+      updateLead(id, { email, status: 'scraped' } as Partial<Lead>),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setEditingLeadId(null)
+      setEditEmail('')
+    },
+  })
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -211,14 +224,59 @@ export default function Leads() {
                 {leads.map((lead: Lead) => (
                   <tr key={lead.id}>
                     <td className="email-cell">
-                      {lead.email || <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>이메일 없음</span>}
+                      {editingLeadId === lead.id ? (
+                        <span className="inline-email-edit">
+                          <input
+                            type="email"
+                            className="inline-email-input"
+                            value={editEmail}
+                            onChange={(e) => setEditEmail(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && editEmail.trim()) {
+                                emailMutation.mutate({ id: lead.id, email: editEmail.trim() })
+                              }
+                              if (e.key === 'Escape') setEditingLeadId(null)
+                            }}
+                            placeholder="이메일 입력 후 Enter"
+                            autoFocus
+                          />
+                          <button
+                            className="btn-small btn-view-results"
+                            onClick={() => editEmail.trim() && emailMutation.mutate({ id: lead.id, email: editEmail.trim() })}
+                          >저장</button>
+                          <button
+                            className="btn-small"
+                            style={{ background: 'var(--gray-100)', color: 'var(--gray-600)' }}
+                            onClick={() => setEditingLeadId(null)}
+                          >취소</button>
+                        </span>
+                      ) : lead.email ? (
+                        lead.email
+                      ) : (
+                        <span
+                          className="add-email-btn"
+                          onClick={() => { setEditingLeadId(lead.id); setEditEmail('') }}
+                          title="클릭하여 이메일 직접 입력"
+                        >
+                          + 이메일 추가
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span className={`platform-badge ${lead.platform}`}>
                         {PLATFORM_LABELS[lead.platform] || lead.platform}
                       </span>
                     </td>
-                    <td>{lead.channel_name || '-'}</td>
+                    <td>
+                      {lead.channel_url ? (
+                        <a href={lead.channel_url} target="_blank" rel="noopener noreferrer" className="channel-link">
+                          {lead.channel_name || '채널 보기'}
+                          <span className="channel-link-icon">{'\u2197'}</span>
+                        </a>
+                      ) : (
+                        lead.channel_name || '-'
+                      )}
+                    </td>
                     <td>{formatSubscribers(lead.subscriber_count)}</td>
                     <td>
                       <span className={`confidence ${confidenceClass(lead.confidence_score)}`}>

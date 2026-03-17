@@ -5,7 +5,6 @@ import { PLATFORM_LABELS, SUGGESTED_CATEGORIES } from '../types'
 
 const PLATFORMS = Object.entries(PLATFORM_LABELS).filter(([k]) => k !== 'unknown')
 
-// Platforms that support discovery mode
 const DISCOVERY_PLATFORMS: Record<string, boolean> = {
   youtube: true,
 }
@@ -14,19 +13,15 @@ interface Props {
   onCreated?: () => void
 }
 
-type Mode = 'discovery' | 'url'
-
 export default function CollectionSetupForm({ onCreated }: Props) {
-  const [mode, setMode] = useState<Mode>('discovery')
   const [label, setLabel] = useState('')
 
-  // Discovery mode state
+  // Discovery mode state (primary)
   const [keywordsText, setKeywordsText] = useState('')
   const [discoveryPlatform, setDiscoveryPlatform] = useState('youtube')
 
-  // URL mode state
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
-  const [customPlatform, setCustomPlatform] = useState('')
+  // URL mode state (inside advanced)
+  const [useUrlMode, setUseUrlMode] = useState(false)
   const [urls, setUrls] = useState('')
 
   // Shared state
@@ -48,39 +43,17 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       setLabel('')
       setKeywordsText('')
-      setSelectedPlatforms([])
-      setCustomPlatform('')
       setSelectedCategories([])
       setCustomCategory('')
       setSubscriberMin('')
       setSubscriberMax('')
       setTargetCount('')
       setUrls('')
+      setUseUrlMode(false)
       onCreated?.()
     },
   })
 
-  // URL mode helpers
-  const togglePlatform = (key: string) => {
-    setSelectedPlatforms((prev) =>
-      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
-    )
-  }
-
-  const addCustomPlatform = () => {
-    const val = customPlatform.trim().toLowerCase()
-    if (!val || selectedPlatforms.includes(val)) return
-    setSelectedPlatforms((prev) => [...prev, val])
-    setCustomPlatform('')
-  }
-
-  const removePlatform = (key: string) => {
-    setSelectedPlatforms((prev) => prev.filter((p) => p !== key))
-  }
-
-  const isPresetPlatform = (key: string) => PLATFORMS.some(([k]) => k === key)
-
-  // Category helpers (shared)
   const toggleCategory = (cat: string) => {
     setSelectedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
@@ -97,11 +70,26 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (mode === 'discovery') {
-      const keywords = keywordsText
-        .split(',')
-        .map((k) => k.trim())
-        .filter(Boolean)
+    if (useUrlMode) {
+      const targets = urls.split('\n').map((u) => u.trim()).filter(Boolean)
+      if (targets.length === 0) return
+
+      mutation.mutate({
+        job: {
+          label: label || undefined,
+          mode: 'url',
+          targets,
+          category_tags: selectedCategories.length > 0 ? selectedCategories : undefined,
+          target_count: targetCount ? Number(targetCount) : undefined,
+          subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
+          subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
+          max_retries: maxRetries,
+          delay_ms: delaySec * 1000,
+          max_depth: maxDepth,
+        },
+      })
+    } else {
+      const keywords = keywordsText.split(',').map((k) => k.trim()).filter(Boolean)
       if (keywords.length === 0) return
 
       mutation.mutate({
@@ -120,65 +108,18 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           max_depth: maxDepth,
         },
       })
-    } else {
-      const targets = urls
-        .split('\n')
-        .map((u) => u.trim())
-        .filter(Boolean)
-      if (targets.length === 0) return
-
-      mutation.mutate({
-        job: {
-          label: label || undefined,
-          mode: 'url',
-          targets,
-          platform: selectedPlatforms.length > 0 ? selectedPlatforms.join(',') : undefined,
-          category_tags: selectedCategories.length > 0 ? selectedCategories : undefined,
-          target_count: targetCount ? Number(targetCount) : undefined,
-          subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
-          subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
-          max_retries: maxRetries,
-          delay_ms: delaySec * 1000,
-          max_depth: maxDepth,
-        },
-      })
     }
   }
 
   const urlCount = urls.split('\n').map((u) => u.trim()).filter(Boolean).length
   const keywordCount = keywordsText.split(',').map((k) => k.trim()).filter(Boolean).length
 
-  const canSubmit =
-    mode === 'discovery'
-      ? keywordCount > 0
-      : urlCount > 0
+  const canSubmit = useUrlMode ? urlCount > 0 : keywordCount > 0
 
   return (
     <form onSubmit={handleSubmit} className="setup-form">
-      {/* Mode Toggle */}
-      <div className="mode-toggle">
-        <button
-          type="button"
-          className={`mode-toggle-btn${mode === 'discovery' ? ' active' : ''}`}
-          onClick={() => setMode('discovery')}
-        >
-          <span className="mode-toggle-icon">&#128269;</span>
-          키워드 탐색
-        </button>
-        <button
-          type="button"
-          className={`mode-toggle-btn${mode === 'url' ? ' active' : ''}`}
-          onClick={() => setMode('url')}
-        >
-          <span className="mode-toggle-icon">&#128279;</span>
-          URL 직접 입력
-        </button>
-      </div>
-
       <div className="mode-desc">
-        {mode === 'discovery'
-          ? '검색 키워드를 입력하면 해당 키워드로 크리에이터를 자동으로 찾아 연락처를 수집합니다'
-          : '이미 알고 있는 채널의 URL을 직접 입력하여 연락처를 수집합니다'}
+        검색 키워드를 입력하면 해당 키워드로 크리에이터를 자동으로 찾아 연락처를 수집합니다
       </div>
 
       {/* Section 1: 기본 정보 */}
@@ -191,13 +132,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             className="setup-input"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder={mode === 'discovery' ? '예: 3월 뷰티 유튜버 탐색' : '예: 경쟁사 크리에이터 수집'}
+            placeholder="예: 3월 뷰티 유튜버 탐색"
           />
         </label>
       </div>
 
-      {/* Discovery Mode: Keywords + Platform */}
-      {mode === 'discovery' && (
+      {/* Section 2: 검색 설정 */}
+      {!useUrlMode && (
         <div className="setup-section">
           <h4 className="setup-section-title">검색 설정</h4>
 
@@ -237,72 +178,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         </div>
       )}
 
-      {/* URL Mode: URL Input + Platform */}
-      {mode === 'url' && (
-        <>
-          <div className="setup-section">
-            <h4 className="setup-section-title">
-              수집 대상
-              {urlCount > 0 && <span className="setup-url-count">{urlCount}개 URL</span>}
-            </h4>
-            <label className="setup-label">
-              채널/프로필 URL
-              <textarea
-                className="setup-textarea"
-                value={urls}
-                onChange={(e) => setUrls(e.target.value)}
-                rows={4}
-                placeholder={'한 줄에 하나씩 입력\nhttps://youtube.com/@채널이름\nhttps://instagram.com/아이디\nhttps://liveklass.com/creator/이름'}
-                required
-              />
-              <span className="setup-help">크롤링할 크리에이터의 채널 주소를 입력하세요</span>
-            </label>
-          </div>
-
-          <div className="setup-section">
-            <div className="setup-label">
-              플랫폼 <span className="setup-hint">(복수 선택 가능)</span>
-              <div className="platform-selector">
-                {PLATFORMS.map(([key, name]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`platform-chip${selectedPlatforms.includes(key) ? ' active' : ''}`}
-                    onClick={() => togglePlatform(key)}
-                  >
-                    {name}
-                  </button>
-                ))}
-                {selectedPlatforms.filter((p) => !isPresetPlatform(p)).map((p) => (
-                  <span key={p} className="platform-chip active custom">
-                    {p}
-                    <button type="button" className="chip-remove" onClick={() => removePlatform(p)}>&times;</button>
-                  </span>
-                ))}
-              </div>
-              <div className="inline-add">
-                <input
-                  type="text"
-                  className="setup-input"
-                  value={customPlatform}
-                  onChange={(e) => setCustomPlatform(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomPlatform() } }}
-                  placeholder="다른 플랫폼 직접 입력 (예: liveklass.com)"
-                />
-                <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomPlatform}>추가</button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
       {/* Shared: 타겟 조건 */}
       <div className="setup-section">
         <h4 className="setup-section-title">타겟 조건</h4>
         <span className="setup-section-desc">
-          {mode === 'discovery'
-            ? '검색된 크리에이터를 아래 조건으로 필터링합니다'
-            : '수집 후 필터링 기준으로 사용됩니다'}
+          {useUrlMode
+            ? '수집 후 필터링 기준으로 사용됩니다'
+            : '검색된 크리에이터를 아래 조건으로 필터링합니다'}
         </span>
 
         <div className="setup-label" style={{ marginTop: 12 }}>
@@ -349,7 +231,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
               placeholder="예: 1000"
               min={0}
             />
-            {mode === 'discovery' && (
+            {!useUrlMode && (
               <span className="setup-help">이 수 이상의 구독자를 가진 채널만 수집합니다</span>
             )}
           </label>
@@ -373,7 +255,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             className="setup-input"
             value={targetCount}
             onChange={(e) => setTargetCount(e.target.value)}
-            placeholder={mode === 'discovery' ? '예: 30' : '예: 50'}
+            placeholder="예: 30"
             min={1}
           />
           <span className="setup-help">이 수만큼 리드를 확보하면 탐색을 자동 중단합니다</span>
@@ -391,29 +273,58 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           <span className={`toggle-arrow ${showAdvanced ? 'open' : ''}`}>&#9662;</span>
         </button>
         {showAdvanced && (
-          <div className="setup-row-3">
-            <label className="setup-label">
-              재시도 횟수
-              <input type="number" className="setup-input" value={maxRetries} onChange={(e) => setMaxRetries(Number(e.target.value))} min={0} max={10} />
-            </label>
-            <label className="setup-label">
-              대기 시간(초)
-              <input type="number" className="setup-input" value={delaySec} onChange={(e) => setDelaySec(Number(e.target.value))} min={0} max={30} />
-            </label>
-            <label className="setup-label">
-              탐색 깊이
-              <input type="number" className="setup-input" value={maxDepth} onChange={(e) => setMaxDepth(Number(e.target.value))} min={1} max={5} />
-            </label>
-          </div>
+          <>
+            <div className="setup-row-3">
+              <label className="setup-label">
+                재시도 횟수
+                <input type="number" className="setup-input" value={maxRetries} onChange={(e) => setMaxRetries(Number(e.target.value))} min={0} max={10} />
+              </label>
+              <label className="setup-label">
+                대기 시간(초)
+                <input type="number" className="setup-input" value={delaySec} onChange={(e) => setDelaySec(Number(e.target.value))} min={0} max={30} />
+              </label>
+              <label className="setup-label">
+                탐색 깊이
+                <input type="number" className="setup-input" value={maxDepth} onChange={(e) => setMaxDepth(Number(e.target.value))} min={1} max={5} />
+              </label>
+            </div>
+
+            {/* URL 직접 입력 (고급) */}
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--gray-100)' }}>
+              <label className="setup-label" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={useUrlMode}
+                  onChange={(e) => setUseUrlMode(e.target.checked)}
+                />
+                <span>URL 직접 입력 모드로 전환</span>
+                <span className="setup-hint">(이미 알고 있는 채널 URL이 있을 때)</span>
+              </label>
+              {useUrlMode && (
+                <label className="setup-label" style={{ marginTop: 8 }}>
+                  채널/프로필 URL
+                  {urlCount > 0 && <span className="setup-url-count">{urlCount}개 URL</span>}
+                  <textarea
+                    className="setup-textarea"
+                    value={urls}
+                    onChange={(e) => setUrls(e.target.value)}
+                    rows={4}
+                    placeholder={'한 줄에 하나씩 입력\nhttps://youtube.com/@채널이름\nhttps://instagram.com/아이디'}
+                    required
+                  />
+                </label>
+              )}
+            </div>
+          </>
         )}
       </div>
 
       <button type="submit" className="btn btn-primary setup-submit" disabled={mutation.isPending || !canSubmit}>
         {mutation.isPending
           ? '탐색 생성 중...'
-          : mode === 'discovery'
-            ? '크리에이터 탐색 시작'
-            : '탐색 시작'}
+          : useUrlMode
+            ? '채널 수집 시작'
+            : '크리에이터 탐색 시작'}
       </button>
 
       {mutation.isError && (

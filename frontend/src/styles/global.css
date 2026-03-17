@@ -409,6 +409,54 @@ body {
 .data-table tr:hover td { background: var(--gray-50); }
 .data-table .email-cell { color: var(--primary-600); font-weight: 500; }
 
+/* ===== Channel Link ===== */
+.channel-link {
+  color: var(--gray-700);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.channel-link:hover { color: var(--primary-600); text-decoration: underline; }
+
+.channel-link-icon {
+  font-size: 0.7rem;
+  margin-left: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.channel-link:hover .channel-link-icon { opacity: 1; }
+
+/* ===== Inline Email Edit ===== */
+.add-email-btn {
+  color: var(--primary-600);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.add-email-btn:hover { background: var(--primary-50); }
+
+.inline-email-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inline-email-input {
+  padding: 4px 8px;
+  border: 1px solid var(--primary-500);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  width: 180px;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
 /* ===== Status & Platform Badges ===== */
 .status-badge {
   display: inline-block;

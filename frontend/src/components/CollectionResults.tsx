@@ -198,7 +198,16 @@ export default function CollectionResults({ initialJobId }: Props) {
                             {PLATFORM_LABELS[lead.platform] || lead.platform}
                           </span>
                         </td>
-                        <td>{lead.channel_name || '-'}</td>
+                        <td>
+                          {lead.channel_url ? (
+                            <a href={lead.channel_url} target="_blank" rel="noopener noreferrer" className="channel-link">
+                              {lead.channel_name || '채널 보기'}
+                              <span className="channel-link-icon">{'\u2197'}</span>
+                            </a>
+                          ) : (
+                            lead.channel_name || '-'
+                          )}
+                        </td>
                         <td>{formatSubscribers(lead.subscriber_count)}</td>
                         <td>
                           <span className={`confidence ${confidenceClass(lead.confidence_score)}`}>
