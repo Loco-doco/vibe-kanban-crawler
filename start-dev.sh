@@ -36,10 +36,53 @@ echo ""
 echo -e "${GREEN}[Vibe Dev]${NC} 포트 할당: 백엔드=${YELLOW}$BACKEND_PORT${NC}, 프론트=${YELLOW}$FRONTEND_PORT${NC}"
 echo ""
 
+# ─── 자동 셋업 (의존성 없으면 자동 설치) ──────────────────────
+needs_setup=false
+
+if [ ! -d "$PROJECT_DIR/lead_researcher/_build" ] || [ ! -d "$PROJECT_DIR/lead_researcher/deps" ]; then
+  needs_setup=true
+  echo -e "${YELLOW}[셋업]${NC} 백엔드 의존성을 설치합니다..."
+  cd "$PROJECT_DIR/lead_researcher"
+  mix local.hex --force --if-missing > /dev/null 2>&1
+  mix local.rebar --force --if-missing > /dev/null 2>&1
+  mix deps.get --quiet
+  mix ecto.create 2>/dev/null || true
+  mix ecto.migrate 2>/dev/null || true
+  cd "$PROJECT_DIR"
+  echo -e "${GREEN}[완료]${NC} 백엔드 준비 완료"
+fi
+
+if [ ! -d "$PROJECT_DIR/frontend/node_modules" ]; then
+  needs_setup=true
+  echo -e "${YELLOW}[셋업]${NC} 프론트엔드 의존성을 설치합니다..."
+  cd "$PROJECT_DIR/frontend" && npm install --silent
+  cd "$PROJECT_DIR"
+  echo -e "${GREEN}[완료]${NC} 프론트엔드 준비 완료"
+fi
+
+if [ ! -d "$PROJECT_DIR/crawler/venv" ]; then
+  needs_setup=true
+  echo -e "${YELLOW}[셋업]${NC} 크롤러 환경을 설정합니다..."
+  cd "$PROJECT_DIR/crawler"
+  python3 -m venv venv
+  "$PROJECT_DIR/crawler/venv/bin/pip" install -r requirements.txt --quiet
+  cd "$PROJECT_DIR"
+  echo -e "${GREEN}[완료]${NC} 크롤러 준비 완료"
+fi
+
+if [ "$needs_setup" = true ]; then
+  echo ""
+fi
+
 # ─── 크롤러용 Python 가상환경 ────────────────────────────────
 if [ -d "$PROJECT_DIR/crawler/venv" ]; then
   export PATH="$PROJECT_DIR/crawler/venv/bin:$PATH"
 fi
+
+# ─── 마이그레이션 실행 (매번) ────────────────────────────────
+cd "$PROJECT_DIR/lead_researcher"
+mix ecto.migrate > /dev/null 2>&1 || true
+cd "$PROJECT_DIR"
 
 # ─── 백엔드 시작 ─────────────────────────────────────────────
 # 해당 포트에 이미 프로세스가 있으면 정리
