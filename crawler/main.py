@@ -54,15 +54,23 @@ def main():
         sys.exit(1)
 
     targets = config.get("targets", [])
+    target_count = config.get("target_count")
     crawler_config = {
         "max_retries": config.get("max_retries", 3),
         "delay_ms": config.get("delay_ms", 2000),
         "max_depth": config.get("max_depth", 3),
     }
 
-    log(f"Starting crawl for {len(targets)} targets")
+    log(f"Starting crawl for {len(targets)} targets" +
+        (f" (target: {target_count} leads)" if target_count else ""))
+
+    total_emitted = 0
+    reached_target = False
 
     for target_url in targets:
+        if reached_target:
+            break
+
         target_url = normalize_url(target_url)
         platform = classify_url(target_url)
 
@@ -74,11 +82,17 @@ def main():
             for lead in scraper.scrape(target_url):
                 lead["platform"] = platform
                 emit_lead(lead)
+                total_emitted += 1
+
+                if target_count and total_emitted >= target_count:
+                    log(f"Reached target count ({target_count}), stopping early")
+                    reached_target = True
+                    break
 
         except Exception as e:
             error(f"Error crawling {target_url}: {str(e)}")
 
-    log("Crawl completed")
+    log(f"Crawl completed. {total_emitted} leads emitted")
 
 
 if __name__ == "__main__":

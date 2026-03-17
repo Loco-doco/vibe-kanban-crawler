@@ -30,7 +30,7 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="quick-actions">
         <button className="btn btn-primary" onClick={() => navigate('/collection')}>
-          <span>{'\u{1F50D}'}</span> 새 수집 시작
+          <span>{'\u{1F50D}'}</span> 새 탐색 시작
         </button>
         <button className="btn btn-secondary" onClick={() => navigate('/leads')}>
           <span>{'\u{1F465}'}</span> 전체 리드
@@ -48,22 +48,22 @@ export default function Dashboard() {
           </div>
           <div className="metric-value">{jobsLoading ? '-' : totalLeadsFound}</div>
           <div className="metric-label">수집된 리드</div>
-          <div className="metric-sub">전체 크롤링 결과</div>
+          <div className="metric-sub">전체 탐색 결과</div>
         </div>
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-icon" style={{ background: '#eff6ff', color: 'var(--info)' }}>{'\u{1F50D}'}</span>
           </div>
           <div className="metric-value">{jobsLoading ? '-' : runningJobs}</div>
-          <div className="metric-label">실행 중 작업</div>
-          <div className="metric-sub">현재 크롤링 진행 중</div>
+          <div className="metric-label">진행 중 탐색</div>
+          <div className="metric-sub">현재 탐색 진행 중</div>
         </div>
         <div className="metric-card">
           <div className="metric-header">
             <span className="metric-icon" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>{'\u2714\uFE0F'}</span>
           </div>
           <div className="metric-value">{jobsLoading ? '-' : completedJobs}</div>
-          <div className="metric-label">완료된 작업</div>
+          <div className="metric-label">완료된 탐색</div>
           <div className="metric-sub">전체 완료 수</div>
         </div>
         <div className="metric-card">
@@ -71,8 +71,8 @@ export default function Dashboard() {
             <span className="metric-icon" style={{ background: 'var(--purple-light)', color: 'var(--purple)' }}>{'\u{1F4CA}'}</span>
           </div>
           <div className="metric-value">{jobsLoading ? '-' : (jobs?.length || 0)}</div>
-          <div className="metric-label">전체 작업 수</div>
-          <div className="metric-sub">누적 크롤링 작업</div>
+          <div className="metric-label">전체 탐색 수</div>
+          <div className="metric-sub">누적 탐색 수</div>
         </div>
       </div>
 
@@ -132,12 +132,12 @@ export default function Dashboard() {
           {/* Crawling Status */}
           <div className="card">
             <div className="card-header">
-              <h2 className="card-title">크롤링 현황</h2>
+              <h2 className="card-title">탐색 현황</h2>
               <a className="card-link" onClick={() => navigate('/collection')} style={{ cursor: 'pointer' }}>전체 보기 {'\u2192'}</a>
             </div>
             {!jobs?.length ? (
               <div className="empty-state" style={{ padding: '24px 20px' }}>
-                <p style={{ fontSize: '0.85rem' }}>아직 크롤링 작업이 없습니다</p>
+                <p style={{ fontSize: '0.85rem' }}>아직 탐색 내역이 없습니다</p>
               </div>
             ) : (
               <div className="job-status-list">
@@ -145,7 +145,7 @@ export default function Dashboard() {
                   <div className="job-status-item" key={job.id}>
                     <div className="job-status-info">
                       <span className={`status-dot ${job.status === 'running' ? 'running' : job.status === 'completed' ? 'completed' : 'pending'}`}></span>
-                      <span>작업 #{job.id} ({job.targets.length}개 대상)</span>
+                      <span>{job.label || `탐색 #${job.id}`} ({job.targets.length}개 대상)</span>
                     </div>
                     {job.status === 'running' && job.progress && (
                       <>

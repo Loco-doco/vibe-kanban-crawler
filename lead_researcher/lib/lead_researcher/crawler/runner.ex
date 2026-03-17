@@ -14,27 +14,34 @@ defmodule LeadResearcher.Crawler.Runner do
       "targets" => targets,
       "max_retries" => job.max_retries,
       "delay_ms" => job.delay_ms,
-      "max_depth" => job.max_depth
+      "max_depth" => job.max_depth,
+      "target_count" => job.target_count
     }
 
     Logger.info("Starting crawl for job #{job_id} with #{length(targets)} targets")
 
-    case Bridge.run(config) do
-      leads when is_list(leads) ->
-        count =
-          leads
-          |> Enum.filter(&valid_lead?/1)
-          |> Enum.reduce(0, fn lead_data, count ->
-            case process_lead(lead_data, job_id) do
-              {:ok, _} -> count + 1
-              {:skip, _} -> count
-              {:error, reason} ->
-                Logger.warning("Failed to save lead: #{inspect(reason)}")
-                count
-            end
-          end)
+    count_ref = :counters.new(1, [:atomics])
 
-        Jobs.update_job(job, %{total_leads_found: count})
+    on_lead = fn lead_data ->
+      if valid_lead?(lead_data) do
+        case process_lead(lead_data, job_id) do
+          {:ok, _} ->
+            :counters.add(count_ref, 1, 1)
+            count = :counters.get(count_ref, 1)
+            Jobs.update_job(job, %{total_leads_found: count})
+
+          {:skip, _} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("Failed to save lead: #{inspect(reason)}")
+        end
+      end
+    end
+
+    case Bridge.run(config, on_lead) do
+      :ok ->
+        count = :counters.get(count_ref, 1)
         Logger.info("Job #{job_id} completed. #{count} new leads saved.")
         :ok
 

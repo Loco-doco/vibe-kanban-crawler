@@ -1,17 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getJobs } from '../api/jobs'
 import { getLeads } from '../api/leads'
 import { addToMasterList } from '../api/masterList'
 import StatusBadge from './StatusBadge'
 import type { Job, Lead } from '../types'
-import { PLATFORM_LABELS } from '../types'
+import { PLATFORM_LABELS, STATUS_LABELS } from '../types'
 
-export default function CollectionResults() {
+interface Props {
+  initialJobId?: number | null
+}
+
+export default function CollectionResults({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | ''>('')
 
+  // Sync initialJobId from parent (monitor → results navigation)
+  useEffect(() => {
+    if (initialJobId) setSelectedJobId(initialJobId)
+  }, [initialJobId])
+
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
-  const completedJobs = jobs?.filter((j: Job) => j.status === 'completed') || []
+  const finishedJobs = jobs?.filter((j: Job) => j.status === 'completed' || j.status === 'failed') || []
 
   const { data: leads, isLoading: leadsLoading } = useQuery({
     queryKey: ['leads', { job_id: selectedJobId }],
@@ -49,7 +58,6 @@ export default function CollectionResults() {
     return 'low'
   }
 
-  // Summary metrics for selected job
   const emailCount = leads?.filter((l: Lead) => l.email).length || 0
   const avgConfidence = leads?.length
     ? leads.reduce((sum: number, l: Lead) => sum + l.confidence_score, 0) / leads.length
@@ -64,10 +72,11 @@ export default function CollectionResults() {
           value={selectedJobId}
           onChange={(e) => setSelectedJobId(e.target.value ? Number(e.target.value) : '')}
         >
-          <option value="">작업을 선택하세요</option>
-          {completedJobs.map((job: Job) => (
+          <option value="">탐색을 선택하세요</option>
+          {finishedJobs.map((job: Job) => (
             <option key={job.id} value={job.id}>
-              {job.label || `작업 #${job.id}`} — 리드 {job.total_leads_found}건
+              {job.label || `탐색 #${job.id}`} — 리드 {job.total_leads_found}건
+              {job.status === 'failed' ? ' (실패)' : ''}
             </option>
           ))}
         </select>
@@ -87,8 +96,8 @@ export default function CollectionResults() {
       {!selectedJobId && (
         <div className="empty-state">
           <span className="empty-state-icon">{'\u{1F4C2}'}</span>
-          <h3>작업을 선택하세요</h3>
-          <p>위 드롭다운에서 완료된 작업을 선택하면 수집 결과를 확인할 수 있습니다</p>
+          <h3>탐색을 선택하세요</h3>
+          <p>위 드롭다운에서 완료된 탐색을 선택하면 수집 결과를 확인할 수 있습니다</p>
         </div>
       )}
 
@@ -123,7 +132,7 @@ export default function CollectionResults() {
             <div className="empty-state">
               <span className="empty-state-icon">{'\u{1F50D}'}</span>
               <h3>수집된 리드가 없습니다</h3>
-              <p>이 작업에서는 리드가 발견되지 않았습니다</p>
+              <p>이 탐색에서는 리드가 발견되지 않았습니다</p>
             </div>
           ) : (
             <div className="card" style={{ marginTop: 0 }}>

@@ -826,6 +826,144 @@ body {
 .status-badge.failed { background: var(--danger-light); color: var(--danger); }
 .status-badge.cancelled { background: var(--gray-100); color: var(--gray-500); }
 
+/* ===== Custom Chip & Inline Add ===== */
+.chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  opacity: 0.7;
+}
+
+.chip-remove:hover { opacity: 1; }
+
+.platform-chip.custom, .category-chip.custom {
+  padding-right: 6px;
+}
+
+.inline-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.inline-add .setup-input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.setup-hint {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.setup-section-desc {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  margin-top: -8px;
+}
+
+.setup-url-count {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--primary-600);
+  margin-left: 8px;
+  background: var(--primary-50);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+/* ===== Tab Badge ===== */
+.tab-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: var(--primary-600);
+  color: white;
+  margin-left: 6px;
+}
+
+/* ===== Campaign Card Additions ===== */
+.campaign-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--danger-light);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.campaign-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-view-results {
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
+.btn-view-results:hover {
+  background: var(--primary-600);
+  color: white;
+}
+
+/* ===== Lead Preview (inside campaign card) ===== */
+.campaign-preview {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+}
+
+.campaign-preview-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 8px;
+}
+
+.campaign-preview-empty {
+  font-size: 0.8rem;
+  color: var(--gray-400);
+  padding: 8px 0;
+}
+
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.mini-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.mini-table td {
+  padding: 6px 8px;
+  color: var(--gray-600);
+  border-bottom: 1px solid var(--gray-50);
+}
+
 @media (max-width: 768px) {
   .setup-row-2 { grid-template-columns: 1fr; }
   .setup-row-3 { grid-template-columns: 1fr; }
