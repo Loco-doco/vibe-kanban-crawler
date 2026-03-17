@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { getJobs } from '../api/jobs'
 import { getLeads } from '../api/leads'
 import { addToMasterList } from '../api/masterList'
 import StatusBadge from './StatusBadge'
-import type { Job, Lead } from '../types'
-import { PLATFORM_LABELS, STATUS_LABELS } from '../types'
+import type { Job, Lead, AddToMasterListResult } from '../types'
+import { PLATFORM_LABELS } from '../types'
 
 interface Props {
   initialJobId?: number | null
@@ -13,11 +14,20 @@ interface Props {
 
 export default function CollectionResults({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | ''>('')
+  const [addResult, setAddResult] = useState<AddToMasterListResult | null>(null)
+  const [addError, setAddError] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
+  const navigate = useNavigate()
 
-  // Sync initialJobId from parent (monitor → results navigation)
   useEffect(() => {
     if (initialJobId) setSelectedJobId(initialJobId)
   }, [initialJobId])
+
+  // Clear add result when job changes
+  useEffect(() => {
+    setAddResult(null)
+    setAddError('')
+  }, [selectedJobId])
 
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
   const finishedJobs = jobs?.filter((j: Job) => j.status === 'completed' || j.status === 'failed') || []
@@ -28,8 +38,6 @@ export default function CollectionResults({ initialJobId }: Props) {
     enabled: selectedJobId !== '',
   })
 
-  const selectedJob = jobs?.find((j: Job) => j.id === selectedJobId)
-
   const handleExportCsv = () => {
     if (!selectedJobId) return
     window.open(`/api/leads/export/csv?job_id=${selectedJobId}`, '_blank')
@@ -37,11 +45,15 @@ export default function CollectionResults({ initialJobId }: Props) {
 
   const handleAddToMasterList = async () => {
     if (!selectedJobId) return
+    setIsAdding(true)
+    setAddError('')
     try {
       const result = await addToMasterList(selectedJobId as number)
-      alert(`마스터 리스트에 ${result.added}건 추가되었습니다.${result.duplicates.length > 0 ? ` (중복 ${result.duplicates.length}건)` : ''}`)
+      setAddResult(result)
     } catch {
-      alert('마스터 리스트 추가 중 오류가 발생했습니다.')
+      setAddError('마스터 리스트 추가 중 오류가 발생했습니다.')
+    } finally {
+      setIsAdding(false)
     }
   }
 
@@ -83,8 +95,12 @@ export default function CollectionResults({ initialJobId }: Props) {
 
         {selectedJobId && (
           <div className="results-actions">
-            <button className="btn btn-secondary" onClick={handleAddToMasterList}>
-              {'\u{1F4CB}'} 마스터 리스트 추가
+            <button
+              className="btn btn-primary"
+              onClick={handleAddToMasterList}
+              disabled={isAdding || !leads?.length}
+            >
+              {isAdding ? '추가 중...' : '\u{1F4CB} 마스터 리스트 추가'}
             </button>
             <button className="btn btn-secondary" onClick={handleExportCsv}>
               {'\u2B07\uFE0F'} CSV 내보내기
@@ -92,6 +108,29 @@ export default function CollectionResults({ initialJobId }: Props) {
           </div>
         )}
       </div>
+
+      {/* Add Result Banner */}
+      {addResult && (
+        <div className="add-result-banner">
+          <div className="add-result-info">
+            <strong>{addResult.added}건</strong> 마스터 리스트에 추가됨
+            {addResult.duplicates.length > 0 && (
+              <span className="add-result-dup"> (중복 {addResult.duplicates.length}건 — 이미 등록된 리드)</span>
+            )}
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => navigate('/master-list')}
+          >
+            마스터 리스트 보기 {'\u2192'}
+          </button>
+        </div>
+      )}
+
+      {/* Add Error */}
+      {addError && (
+        <div className="campaign-error" style={{ marginBottom: 16 }}>{addError}</div>
+      )}
 
       {!selectedJobId && (
         <div className="empty-state">
@@ -101,7 +140,7 @@ export default function CollectionResults({ initialJobId }: Props) {
         </div>
       )}
 
-      {selectedJobId && selectedJob && (
+      {selectedJobId && (
         <>
           {/* Metrics */}
           <div className="results-metrics">
@@ -151,7 +190,9 @@ export default function CollectionResults({ initialJobId }: Props) {
                   <tbody>
                     {leads.map((lead: Lead) => (
                       <tr key={lead.id}>
-                        <td className="email-cell">{lead.email || '-'}</td>
+                        <td className="email-cell">
+                          {lead.email || <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>이메일 없음</span>}
+                        </td>
                         <td>
                           <span className={`platform-badge ${lead.platform}`}>
                             {PLATFORM_LABELS[lead.platform] || lead.platform}

@@ -6,6 +6,8 @@ interface LeadParams {
   platform?: string
   status?: string
   search?: string
+  has_email?: string
+  min_confidence?: string
   sort?: string
   order?: string
   limit?: number

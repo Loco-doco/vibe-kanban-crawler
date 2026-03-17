@@ -22,11 +22,19 @@ const PLATFORM_FILTERS = [
   { value: 'web', label: 'Web' },
 ]
 
+const EMAIL_FILTERS = [
+  { value: '', label: '전체' },
+  { value: 'true', label: '이메일 있음' },
+  { value: 'false', label: '이메일 없음' },
+]
+
 export default function Leads() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [platformFilter, setPlatformFilter] = useState('')
+  const [emailFilter, setEmailFilter] = useState('')
+  const [minConfidence, setMinConfidence] = useState('')
   const [sort, setSort] = useState('confidence_score')
   const [order, setOrder] = useState('desc')
 
@@ -36,11 +44,13 @@ export default function Leads() {
   }, [search])
 
   const { data: leads, isLoading } = useQuery({
-    queryKey: ['leads', { search: debouncedSearch, status: statusFilter, platform: platformFilter, sort, order }],
+    queryKey: ['leads', { search: debouncedSearch, status: statusFilter, platform: platformFilter, has_email: emailFilter, min_confidence: minConfidence, sort, order }],
     queryFn: () => getLeads({
       search: debouncedSearch || undefined,
       status: statusFilter || undefined,
       platform: platformFilter || undefined,
+      has_email: emailFilter || undefined,
+      min_confidence: minConfidence || undefined,
       sort,
       order,
     }),
@@ -82,12 +92,18 @@ export default function Leads() {
     return String(count)
   }
 
+  const emailCount = leads?.filter((l) => l.email).length || 0
+  const totalCount = leads?.length || 0
+
   return (
     <>
       <div className="page-header">
         <div>
           <h2>전체 리드</h2>
-          <p className="page-header-sub">수집된 모든 연락처를 관리하고 상태를 업데이트하세요</p>
+          <p className="page-header-sub">
+            수집된 모든 연락처를 관리하세요
+            {totalCount > 0 && ` (${totalCount}건${emailFilter === '' ? `, 이메일 ${emailCount}건` : ''})`}
+          </p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-secondary" onClick={handleExportCsv}>
@@ -96,6 +112,7 @@ export default function Leads() {
         </div>
       </div>
 
+      {/* Filter Bar */}
       <div className="filter-bar" style={{ flexWrap: 'wrap' }}>
         <div className="search-input-box">
           <span style={{ color: 'var(--gray-400)', marginRight: 4 }}>{'\u{1F50E}'}</span>
@@ -106,6 +123,8 @@ export default function Leads() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {/* Status filters */}
         {STATUS_FILTERS.map((f) => (
           <span
             key={f.value}
@@ -115,7 +134,10 @@ export default function Leads() {
             {f.label}
           </span>
         ))}
-        <span style={{ width: 1, height: 20, background: 'var(--gray-200)', margin: '0 4px' }} />
+
+        <span className="filter-divider" />
+
+        {/* Platform filters */}
         {PLATFORM_FILTERS.map((f) => (
           <span
             key={f.value}
@@ -125,6 +147,29 @@ export default function Leads() {
             {f.label}
           </span>
         ))}
+
+        <span className="filter-divider" />
+
+        {/* Email presence filter */}
+        {EMAIL_FILTERS.map((f) => (
+          <span
+            key={`email-${f.value}`}
+            className={`filter-chip${emailFilter === f.value ? ' active' : ''}`}
+            onClick={() => setEmailFilter(f.value)}
+          >
+            {f.label}
+          </span>
+        ))}
+
+        <span className="filter-divider" />
+
+        {/* Confidence filter */}
+        <span
+          className={`filter-chip${minConfidence === '0.7' ? ' active' : ''}`}
+          onClick={() => setMinConfidence(minConfidence === '0.7' ? '' : '0.7')}
+        >
+          정확도 70%+
+        </span>
       </div>
 
       <div className="card">
@@ -134,7 +179,11 @@ export default function Leads() {
           <div className="empty-state">
             <span className="empty-state-icon">{'\u{1F465}'}</span>
             <h3>리드가 없습니다</h3>
-            <p>리드 수집 페이지에서 크롤링 작업을 시작하세요</p>
+            <p>
+              {statusFilter || platformFilter || emailFilter || minConfidence
+                ? '현재 필터 조건에 맞는 리드가 없습니다. 필터를 변경해보세요.'
+                : '리드 수집 페이지에서 키워드 탐색을 시작하세요'}
+            </p>
           </div>
         ) : (
           <div className="table-wrap">
@@ -161,7 +210,9 @@ export default function Leads() {
               <tbody>
                 {leads.map((lead: Lead) => (
                   <tr key={lead.id}>
-                    <td className="email-cell">{lead.email || '-'}</td>
+                    <td className="email-cell">
+                      {lead.email || <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>이메일 없음</span>}
+                    </td>
                     <td>
                       <span className={`platform-badge ${lead.platform}`}>
                         {PLATFORM_LABELS[lead.platform] || lead.platform}
