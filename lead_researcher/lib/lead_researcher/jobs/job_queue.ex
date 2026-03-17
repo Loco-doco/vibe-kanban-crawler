@@ -49,12 +49,22 @@ defmodule LeadResearcher.Jobs.JobQueue do
   end
 
   @impl true
-  def handle_info({ref, _result}, state) when is_reference(ref) do
+  def handle_info({ref, result}, state) when is_reference(ref) do
     {job_id, state} = pop_task_by_ref(ref, state)
 
     if job_id do
-      Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
-      Logger.info("Job #{job_id} completed successfully")
+      case result do
+        {:error, reason} ->
+          Jobs.update_job_status(job_id, "failed", %{
+            error_message: inspect(reason),
+            completed_at: DateTime.utc_now()
+          })
+          Logger.error("Job #{job_id} failed: #{inspect(reason)}")
+
+        _ ->
+          Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
+          Logger.info("Job #{job_id} completed successfully")
+      end
     end
 
     Process.demonitor(ref, [:flush])

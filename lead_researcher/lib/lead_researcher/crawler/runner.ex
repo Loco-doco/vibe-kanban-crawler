@@ -20,10 +20,21 @@ defmodule LeadResearcher.Crawler.Runner do
         []
       end
 
+    category_tags =
+      if job.category_tags do
+        case Jason.decode(job.category_tags) do
+          {:ok, list} when is_list(list) -> list
+          _ -> []
+        end
+      else
+        []
+      end
+
     config = %{
       "mode" => job.mode || "url",
       "targets" => targets,
       "keywords" => keywords,
+      "category_tags" => category_tags,
       "platform" => job.platform,
       "subscriber_min" => job.subscriber_min,
       "subscriber_max" => job.subscriber_max,
