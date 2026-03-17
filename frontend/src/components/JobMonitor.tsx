@@ -68,8 +68,11 @@ export default function JobMonitor({ onViewResults }: Props) {
       </div>
 
       <div className="campaign-meta">
+        {job.mode === 'discovery' && <span className="campaign-tag" style={{ background: 'var(--primary-50)', color: 'var(--primary-600)' }}>키워드 탐색</span>}
         {job.platform && <span>{job.platform.split(',').map((p) => PLATFORM_LABELS[p] || p).join(', ')}</span>}
-        <span>{job.targets.length}개 대상</span>
+        {job.mode === 'discovery' && job.keywords?.length
+          ? <span>{job.keywords.length}개 키워드</span>
+          : <span>{job.targets.length}개 대상</span>}
         <span>리드 {job.total_leads_found}건</span>
         {isDone ? <span>{formatTime(job.inserted_at)}</span> : <span>{formatDuration(job)}</span>}
       </div>

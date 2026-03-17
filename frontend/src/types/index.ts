@@ -3,8 +3,10 @@ export interface Job {
   label: string | null
   targets: string[]
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  mode: 'url' | 'discovery'
   platform: string | null
   category_tags: string[]
+  keywords: string[] | null
   target_count: number | null
   subscriber_min: number | null
   subscriber_max: number | null
@@ -45,7 +47,9 @@ export interface Lead {
 export interface CreateJobPayload {
   job: {
     label?: string
+    mode?: 'url' | 'discovery'
     targets: string[]
+    keywords?: string[]
     platform?: string
     category_tags?: string[]
     target_count?: number

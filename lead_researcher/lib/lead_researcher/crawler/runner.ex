@@ -10,15 +10,30 @@ defmodule LeadResearcher.Crawler.Runner do
     job = Jobs.get_job!(job_id)
     targets = Jason.decode!(job.targets)
 
+    keywords =
+      if job.keywords do
+        case Jason.decode(job.keywords) do
+          {:ok, list} when is_list(list) -> list
+          _ -> []
+        end
+      else
+        []
+      end
+
     config = %{
+      "mode" => job.mode || "url",
       "targets" => targets,
+      "keywords" => keywords,
+      "platform" => job.platform,
+      "subscriber_min" => job.subscriber_min,
+      "subscriber_max" => job.subscriber_max,
       "max_retries" => job.max_retries,
       "delay_ms" => job.delay_ms,
       "max_depth" => job.max_depth,
       "target_count" => job.target_count
     }
 
-    Logger.info("Starting crawl for job #{job_id} with #{length(targets)} targets")
+    Logger.info("Starting #{job.mode || "url"} crawl for job #{job_id}")
 
     count_ref = :counters.new(1, [:atomics])
 
