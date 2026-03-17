@@ -22,10 +22,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [subscriberMin, setSubscriberMin] = useState('')
   const [subscriberMax, setSubscriberMax] = useState('')
   const [targetCount, setTargetCount] = useState('')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [maxRetries, setMaxRetries] = useState(3)
-  const [delaySec, setDelaySec] = useState(2)
-  const [maxDepth, setMaxDepth] = useState(3)
 
   const queryClient = useQueryClient()
 
@@ -73,9 +69,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         target_count: targetCount ? Number(targetCount) : 50,
         subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
         subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
-        max_retries: maxRetries,
-        delay_ms: delaySec * 1000,
-        max_depth: maxDepth,
+        max_retries: 3,
+        delay_ms: 2000,
+        max_depth: 3,
       },
     })
   }
@@ -218,34 +214,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           />
           <span className="setup-help">이 수만큼 리드를 확보하면 탐색을 자동 중단합니다</span>
         </label>
-      </div>
-
-      {/* 고급 설정 */}
-      <div className="setup-section">
-        <button
-          type="button"
-          className="btn-toggle"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-        >
-          고급 설정 {showAdvanced ? '접기' : '펼치기'}
-          <span className={`toggle-arrow ${showAdvanced ? 'open' : ''}`}>&#9662;</span>
-        </button>
-        {showAdvanced && (
-          <div className="setup-row-3">
-            <label className="setup-label">
-              재시도 횟수
-              <input type="number" className="setup-input" value={maxRetries} onChange={(e) => setMaxRetries(Number(e.target.value))} min={0} max={10} />
-            </label>
-            <label className="setup-label">
-              대기 시간(초)
-              <input type="number" className="setup-input" value={delaySec} onChange={(e) => setDelaySec(Number(e.target.value))} min={0} max={30} />
-            </label>
-            <label className="setup-label">
-              탐색 깊이
-              <input type="number" className="setup-input" value={maxDepth} onChange={(e) => setMaxDepth(Number(e.target.value))} min={1} max={5} />
-            </label>
-          </div>
-        )}
       </div>
 
       <button type="submit" className="btn btn-primary setup-submit" disabled={mutation.isPending || keywordCount === 0}>
