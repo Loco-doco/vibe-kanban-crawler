@@ -46,14 +46,14 @@ class EmailFinder:
         strategies = self.EFFORT_STRATEGIES.get(self.effort, self.EFFORT_STRATEGIES[2])
         seen_emails = set()
 
-        # Pre-fetch about page (shared by youtube_about and youtube_links)
-        about_url = channel_url.rstrip("/") + "/about"
-        about_html = fetch_with_retry(about_url, self.max_retries, self.delay_ms)
+        # Fetch channel main page (YouTube deprecated /about as separate URL)
+        channel_page_url = channel_url.rstrip("/")
+        channel_html = fetch_with_retry(channel_page_url, self.max_retries, self.delay_ms)
 
         ctx = {
-            "about_html": about_html,
-            "about_url": about_url,
-            "channel_id": channel_id or self._extract_channel_id(channel_url, about_html),
+            "about_html": channel_html,
+            "about_url": channel_page_url,
+            "channel_id": channel_id or self._extract_channel_id(channel_url, channel_html),
         }
 
         for strategy_name in strategies:
@@ -74,14 +74,14 @@ class EmailFinder:
             if strategy_name != strategies[-1]:
                 time.sleep(self.delay_ms / 1000 * 0.3)
 
-    # ── Strategy: YouTube About Page ──
+    # ── Strategy: YouTube Channel Page ──
 
     def _search_youtube_about(self, channel_name, channel_url, ctx):
         html = ctx["about_html"]
         if not html:
             return
 
-        # Extract from page text
+        # Strategy 1: Extract from visible page text
         emails = extract_emails_from_html(html)
         for email in emails:
             if is_valid_email(email):
@@ -94,23 +94,62 @@ class EmailFinder:
                     "source": "youtube_about",
                 }
 
-        # Extract from ytInitialData JSON blob
-        for match in re.finditer(
-            r"var ytInitialData\s*=\s*(\{.+?\});\s*</script>", html, re.DOTALL
-        ):
-            data_str = match.group(1)
-            for email in set(
-                re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", data_str)
-            ):
-                if is_valid_email(email):
-                    yield {
-                        "email": email,
-                        "channel_name": channel_name,
-                        "channel_url": channel_url,
-                        "evidence_link": ctx["about_url"],
-                        "confidence_score": 0.75,
-                        "source": "youtube_data",
-                    }
+        # Strategy 2: Parse ytInitialData for channel description (most reliable)
+        found_from_description = False
+        match = re.search(
+            r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL
+        )
+        if match:
+            try:
+                data = json.loads(match.group(1))
+
+                # Extract channel description from metadata
+                description = (
+                    data
+                    .get("metadata", {})
+                    .get("channelMetadataRenderer", {})
+                    .get("description", "")
+                )
+                if description:
+                    for email in set(
+                        re.findall(
+                            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                            description,
+                        )
+                    ):
+                        if is_valid_email(email):
+                            found_from_description = True
+                            yield {
+                                "email": email,
+                                "channel_name": channel_name,
+                                "channel_url": channel_url,
+                                "evidence_link": ctx["about_url"],
+                                "confidence_score": 0.85,
+                                "source": "youtube_description",
+                            }
+
+            except json.JSONDecodeError:
+                pass
+
+            # Strategy 3: Broad email scan across ytInitialData (fallback only)
+            # Only if structured description parsing found nothing
+            if not found_from_description:
+                data_str = match.group(1)
+                for email in set(
+                    re.findall(
+                        r"(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                        data_str,
+                    )
+                ):
+                    if is_valid_email(email):
+                        yield {
+                            "email": email,
+                            "channel_name": channel_name,
+                            "channel_url": channel_url,
+                            "evidence_link": ctx["about_url"],
+                            "confidence_score": 0.75,
+                            "source": "youtube_data",
+                        }
 
     # ── Strategy: YouTube External Links ──
 

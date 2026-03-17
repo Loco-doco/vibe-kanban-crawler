@@ -12,17 +12,17 @@ class YouTubeScraper(BaseScraper):
     """Rule-based scraper for YouTube channels."""
 
     def scrape(self, url):
-        about_url = self._normalize_to_about(url)
         channel_url = self._normalize_channel_url(url)
 
-        html = fetch_with_retry(about_url, self.max_retries, self.delay_ms)
+        # Fetch channel main page (YouTube deprecated /about as separate URL)
+        html = fetch_with_retry(channel_url, self.max_retries, self.delay_ms)
         if not html:
             return
 
         channel_name = self._extract_channel_name(html)
         subscriber_count = self._extract_subscriber_count(html)
 
-        # Extract emails from about page
+        # Extract emails from page text
         emails = extract_emails_from_html(html)
         seen_emails = set()
 
@@ -33,12 +33,12 @@ class YouTubeScraper(BaseScraper):
                     "email": email,
                     "channel_name": channel_name,
                     "channel_url": channel_url,
-                    "evidence_link": about_url,
+                    "evidence_link": channel_url,
                     "confidence_score": 0.8,
                     "subscriber_count": subscriber_count,
                 }
 
-        # Also try to extract from ytInitialData JSON blob
+        # Extract from ytInitialData JSON blob (channel description + broad scan)
         for lead in self._extract_from_initial_data(html, channel_url, channel_name, subscriber_count):
             if lead["email"].lower() not in seen_emails:
                 seen_emails.add(lead["email"].lower())
@@ -49,12 +49,6 @@ class YouTubeScraper(BaseScraper):
             external_links = self._extract_external_links(html)
             for link in external_links[:5]:
                 yield from self._scrape_linked(link, channel_url, channel_name, seen_emails)
-
-    def _normalize_to_about(self, url):
-        url = url.rstrip("/")
-        if "/about" not in url:
-            url = url + "/about"
-        return url
 
     def _normalize_channel_url(self, url):
         url = url.rstrip("/")
@@ -97,26 +91,59 @@ class YouTubeScraper(BaseScraper):
 
     def _extract_from_initial_data(self, html, channel_url, channel_name, subscriber_count):
         """Try to extract emails from ytInitialData JSON embedded in page."""
-        match = re.search(r"var ytInitialData\s*=\s*(\{.+?\});\s*</script>", html, re.DOTALL)
+        match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
         if not match:
             return
 
+        data_str = match.group(1)
+
+        # First try structured extraction from channel description
+        found_from_description = False
         try:
-            data_str = match.group(1)
-            # Extract emails from the JSON string directly
-            emails = set(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", data_str))
-            for email in emails:
-                if is_valid_email(email):
-                    yield {
-                        "email": email,
-                        "channel_name": channel_name,
-                        "channel_url": channel_url,
-                        "evidence_link": channel_url + "/about",
-                        "confidence_score": 0.75,
-                        "subscriber_count": subscriber_count,
-                    }
-        except Exception:
+            import json
+            data = json.loads(data_str)
+            description = (
+                data
+                .get("metadata", {})
+                .get("channelMetadataRenderer", {})
+                .get("description", "")
+            )
+            if description:
+                for email in set(
+                    re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", description)
+                ):
+                    if is_valid_email(email):
+                        found_from_description = True
+                        yield {
+                            "email": email,
+                            "channel_name": channel_name,
+                            "channel_url": channel_url,
+                            "evidence_link": channel_url,
+                            "confidence_score": 0.85,
+                            "subscriber_count": subscriber_count,
+                        }
+        except (json.JSONDecodeError, Exception):
             pass
+
+        # Broad scan: fallback only if structured parsing found nothing
+        if not found_from_description:
+            try:
+                emails = set(re.findall(
+                    r"(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                    data_str,
+                ))
+                for email in emails:
+                    if is_valid_email(email):
+                        yield {
+                            "email": email,
+                            "channel_name": channel_name,
+                            "channel_url": channel_url,
+                            "evidence_link": channel_url,
+                            "confidence_score": 0.75,
+                            "subscriber_count": subscriber_count,
+                        }
+            except Exception:
+                pass
 
     def _extract_external_links(self, html):
         """Extract links from YouTube channel's 'Links' section."""

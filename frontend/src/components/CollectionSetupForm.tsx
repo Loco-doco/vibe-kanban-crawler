@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createJob } from '../api/jobs'
-import { PLATFORM_LABELS, SUGGESTED_CATEGORIES } from '../types'
-
-const PLATFORMS = Object.entries(PLATFORM_LABELS).filter(([k]) => k !== 'unknown')
-
-const DISCOVERY_PLATFORMS: Record<string, boolean> = {
-  youtube: true,
-}
+import { SUGGESTED_CATEGORIES } from '../types'
 
 interface Props {
   onCreated?: () => void
@@ -16,32 +10,31 @@ interface Props {
 const EFFORT_LEVELS = [
   {
     value: 1,
-    label: '\uBE60\uB978 \uD0D0\uC0C9',
-    desc: 'YouTube \uCC44\uB110 \uC815\uBCF4\uB9CC \uD655\uC778\uD569\uB2C8\uB2E4. \uBE60\uB974\uC9C0\uB9CC \uC774\uBA54\uC77C\uC744 \uBABB \uCC3E\uC744 \uD655\uB960\uC774 \uB192\uC2B5\uB2C8\uB2E4.',
+    label: '빠른 탐색',
+    desc: 'YouTube 채널 정보만 확인합니다. 빠르지만 이메일을 못 찾을 확률이 높습니다.',
   },
   {
     value: 2,
-    label: '\uD45C\uC900 \uD0D0\uC0C9',
-    desc: 'YouTube + \uC6F9 \uAC80\uC0C9\uC744 \uD1B5\uD574 \uC774\uBA54\uC77C\uC744 \uCC3E\uC2B5\uB2C8\uB2E4. \uB300\uBD80\uBD84\uC758 \uACBD\uC6B0 \uC774 \uC124\uC815\uC744 \uCD94\uCC9C\uD569\uB2C8\uB2E4.',
+    label: '표준 탐색',
+    desc: 'YouTube + 웹 검색을 통해 이메일을 찾습니다. 대부분의 경우 이 설정을 추천합니다.',
   },
   {
     value: 3,
-    label: '\uC2EC\uCE35 \uD0D0\uC0C9',
-    desc: 'YouTube, \uC6F9 \uAC80\uC0C9, \uC678\uBD80 \uC0AC\uC774\uD2B8\uAE4C\uC9C0 \uBAA8\uB450 \uD0D0\uC0C9\uD569\uB2C8\uB2E4. \uC2DC\uAC04\uC774 \uB354 \uAC78\uB9AC\uC9C0\uB9CC \uC774\uBA54\uC77C \uD655\uBCF4\uC728\uC774 \uAC00\uC7A5 \uB192\uC2B5\uB2C8\uB2E4.',
+    label: '심층 탐색',
+    desc: 'YouTube, 웹 검색, 외부 사이트까지 모두 탐색합니다. 시간이 더 걸리지만 이메일 확보율이 가장 높습니다.',
   },
 ]
 
 export default function CollectionSetupForm({ onCreated }: Props) {
-  const [label, setLabel] = useState('')
   const [keywordsText, setKeywordsText] = useState('')
-  const [discoveryPlatform, setDiscoveryPlatform] = useState('youtube')
+  const [targetCount, setTargetCount] = useState('30')
+  const [searchEffort, setSearchEffort] = useState(2)
+  const [showOptions, setShowOptions] = useState(false)
+  const [label, setLabel] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [customCategory, setCustomCategory] = useState('')
   const [subscriberMin, setSubscriberMin] = useState('')
   const [subscriberMax, setSubscriberMax] = useState('')
-  const [targetCount, setTargetCount] = useState('')
-  const [searchEffort, setSearchEffort] = useState(2)
-  const [showAdvanced, setShowAdvanced] = useState(false)
   const [maxRetries, setMaxRetries] = useState('3')
   const [delayMs, setDelayMs] = useState('2000')
 
@@ -51,14 +44,14 @@ export default function CollectionSetupForm({ onCreated }: Props) {
     mutationFn: createJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      setLabel('')
       setKeywordsText('')
+      setTargetCount('30')
+      setSearchEffort(2)
+      setLabel('')
       setSelectedCategories([])
       setCustomCategory('')
       setSubscriberMin('')
       setSubscriberMax('')
-      setTargetCount('')
-      setSearchEffort(2)
       setMaxRetries('3')
       setDelayMs('2000')
       onCreated?.()
@@ -89,9 +82,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         mode: 'discovery',
         targets: ['discovery'],
         keywords,
-        platform: discoveryPlatform,
+        platform: 'youtube',
         category_tags: selectedCategories.length > 0 ? selectedCategories : undefined,
-        target_count: targetCount ? Number(targetCount) : 50,
+        target_count: targetCount ? Number(targetCount) : 30,
         subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
         subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
         max_retries: Number(maxRetries) || 3,
@@ -106,28 +99,11 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   return (
     <form onSubmit={handleSubmit} className="setup-form">
       <div className="mode-desc">
-        검색 키워드를 입력하면 해당 키워드로 크리에이터를 자동으로 찾아 연락처를 수집합니다
+        검색 키워드를 입력하면 YouTube에서 크리에이터를 자동으로 찾아 연락처를 수집합니다
       </div>
 
-      {/* Section 1: 기본 정보 */}
+      {/* 필수 입력 */}
       <div className="setup-section">
-        <h4 className="setup-section-title">기본 정보</h4>
-        <label className="setup-label">
-          탐색 이름
-          <input
-            type="text"
-            className="setup-input"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="예: 3월 뷰티 유튜버 탐색"
-          />
-        </label>
-      </div>
-
-      {/* Section 2: 검색 설정 */}
-      <div className="setup-section">
-        <h4 className="setup-section-title">검색 설정</h4>
-
         <label className="setup-label">
           검색 키워드
           {keywordCount > 0 && <span className="setup-url-count">{keywordCount}개 키워드</span>}
@@ -142,111 +118,26 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           <span className="setup-help">쉼표(,)로 여러 키워드를 구분하세요. 각 키워드로 크리에이터를 검색합니다</span>
         </label>
 
-        <div className="setup-label">
-          검색 플랫폼
-          <div className="platform-selector">
-            {PLATFORMS.map(([key, name]) => {
-              const supported = DISCOVERY_PLATFORMS[key]
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`platform-chip${discoveryPlatform === key ? ' active' : ''}${!supported ? ' chip-disabled' : ''}`}
-                  onClick={() => supported && setDiscoveryPlatform(key)}
-                >
-                  {name}
-                  {!supported && <span className="chip-soon">준비 중</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* 타겟 조건 */}
-      <div className="setup-section">
-        <h4 className="setup-section-title">타겟 조건</h4>
-        <span className="setup-section-desc">검색된 크리에이터를 아래 조건으로 필터링합니다</span>
-
-        <div className="setup-label" style={{ marginTop: 12 }}>
-          카테고리 <span className="setup-hint">(복수 선택 가능)</span>
-          <div className="category-selector">
-            {SUGGESTED_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`category-chip${selectedCategories.includes(cat) ? ' active' : ''}`}
-                onClick={() => toggleCategory(cat)}
-              >
-                {cat}
-              </button>
-            ))}
-            {selectedCategories.filter((c) => !SUGGESTED_CATEGORIES.includes(c)).map((c) => (
-              <span key={c} className="category-chip active custom">
-                {c}
-                <button type="button" className="chip-remove" onClick={() => toggleCategory(c)}>&times;</button>
-              </span>
-            ))}
-          </div>
-          <div className="inline-add">
-            <input
-              type="text"
-              className="setup-input"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCategory() } }}
-              placeholder="직접 입력 (예: 반려동물, 게임)"
-            />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomCategory}>추가</button>
-          </div>
-        </div>
-
         <div className="setup-row-2">
           <label className="setup-label">
-            최소 구독자
+            수집 목표 수
             <input
               type="number"
               className="setup-input"
-              value={subscriberMin}
-              onChange={(e) => setSubscriberMin(e.target.value)}
-              placeholder="예: 1000"
-              min={0}
+              value={targetCount}
+              onChange={(e) => setTargetCount(e.target.value)}
+              placeholder="30"
+              min={1}
             />
-            <span className="setup-help">이 수 이상의 구독자를 가진 채널만 수집합니다</span>
-          </label>
-          <label className="setup-label">
-            최대 구독자
-            <input
-              type="number"
-              className="setup-input"
-              value={subscriberMax}
-              onChange={(e) => setSubscriberMax(e.target.value)}
-              placeholder="예: 100000"
-              min={0}
-            />
+            <span className="setup-help">이 수만큼 리드를 확보하면 탐색을 자동 중단합니다</span>
           </label>
         </div>
-
-        <label className="setup-label">
-          수집 목표 수
-          <input
-            type="number"
-            className="setup-input"
-            value={targetCount}
-            onChange={(e) => setTargetCount(e.target.value)}
-            placeholder="예: 30"
-            min={1}
-          />
-          <span className="setup-help">이 수만큼 리드를 확보하면 탐색을 자동 중단합니다</span>
-        </label>
       </div>
 
-      {/* 탐색 강도 & 고급 설정 */}
+      {/* 탐색 강도 */}
       <div className="setup-section">
         <h4 className="setup-section-title">탐색 강도</h4>
-        <span className="setup-section-desc">이메일을 찾기 위해 얼마나 다양한 경로를 탐색할지 설정합니다</span>
-
-        <div className="effort-selector" style={{ marginTop: 12 }}>
+        <div className="effort-selector">
           {EFFORT_LEVELS.map((level) => (
             <button
               key={level.value}
@@ -259,18 +150,90 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             </button>
           ))}
         </div>
+      </div>
 
-        <button
-          type="button"
-          className="btn-toggle"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          style={{ marginTop: 16 }}
-        >
-          <span className={`toggle-arrow${showAdvanced ? ' open' : ''}`}>{'\u25BC'}</span>
-          세부 설정
-        </button>
+      {/* 추가 옵션 (접을 수 있는 섹션) */}
+      <button
+        type="button"
+        className="btn-toggle"
+        onClick={() => setShowOptions(!showOptions)}
+      >
+        <span className={`toggle-arrow${showOptions ? ' open' : ''}`}>{'\u25BC'}</span>
+        추가 옵션
+      </button>
 
-        {showAdvanced && (
+      {showOptions && (
+        <div className="setup-section" style={{ marginTop: 8 }}>
+          <label className="setup-label">
+            탐색 이름 <span className="setup-hint">(선택)</span>
+            <input
+              type="text"
+              className="setup-input"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="예: 3월 뷰티 유튜버 탐색"
+            />
+          </label>
+
+          <div className="setup-label" style={{ marginTop: 12 }}>
+            카테고리 <span className="setup-hint">(복수 선택 가능)</span>
+            <div className="category-selector">
+              {SUGGESTED_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`category-chip${selectedCategories.includes(cat) ? ' active' : ''}`}
+                  onClick={() => toggleCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+              {selectedCategories.filter((c) => !SUGGESTED_CATEGORIES.includes(c)).map((c) => (
+                <span key={c} className="category-chip active custom">
+                  {c}
+                  <button type="button" className="chip-remove" onClick={() => toggleCategory(c)}>&times;</button>
+                </span>
+              ))}
+            </div>
+            <div className="inline-add">
+              <input
+                type="text"
+                className="setup-input"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCategory() } }}
+                placeholder="직접 입력 (예: 반려동물, 게임)"
+              />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={addCustomCategory}>추가</button>
+            </div>
+            <span className="setup-help">카테고리를 선택하면 키워드와 조합하여 더 정확한 검색을 합니다</span>
+          </div>
+
+          <div className="setup-row-2" style={{ marginTop: 12 }}>
+            <label className="setup-label">
+              최소 구독자
+              <input
+                type="number"
+                className="setup-input"
+                value={subscriberMin}
+                onChange={(e) => setSubscriberMin(e.target.value)}
+                placeholder="예: 1000"
+                min={0}
+              />
+            </label>
+            <label className="setup-label">
+              최대 구독자
+              <input
+                type="number"
+                className="setup-input"
+                value={subscriberMax}
+                onChange={(e) => setSubscriberMax(e.target.value)}
+                placeholder="예: 100000"
+                min={0}
+              />
+            </label>
+          </div>
+
           <div className="setup-row-2" style={{ marginTop: 12 }}>
             <label className="setup-label">
               재시도 횟수
@@ -282,9 +245,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 min={1}
                 max={10}
               />
-              <span className="setup-help">
-                페이지 로딩에 실패했을 때 다시 시도하는 횟수입니다. 서버 오류나 네트워크 불안정 시 자동으로 재시도합니다.
-              </span>
             </label>
             <label className="setup-label">
               요청 대기 시간
@@ -299,13 +259,10 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 />
                 <span className="input-unit">초</span>
               </div>
-              <span className="setup-help">
-                각 페이지 요청 사이의 대기 시간입니다. 너무 짧으면 사이트에서 차단될 수 있고, 너무 길면 수집이 느려집니다.
-              </span>
             </label>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <button type="submit" className="btn btn-primary setup-submit" disabled={mutation.isPending || keywordCount === 0}>
         {mutation.isPending ? '탐색 생성 중...' : '크리에이터 탐색 시작'}
