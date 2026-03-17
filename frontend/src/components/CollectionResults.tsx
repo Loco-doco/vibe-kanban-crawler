@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getJobs } from '../api/jobs'
 import { getLeads } from '../api/leads'
@@ -18,6 +18,7 @@ export default function CollectionResults({ initialJobId }: Props) {
   const [addError, setAddError] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (initialJobId) setSelectedJobId(initialJobId)
@@ -34,7 +35,7 @@ export default function CollectionResults({ initialJobId }: Props) {
 
   const { data: leads, isLoading: leadsLoading } = useQuery({
     queryKey: ['leads', { job_id: selectedJobId }],
-    queryFn: () => getLeads({ job_id: selectedJobId as number }),
+    queryFn: () => getLeads({ job_id: selectedJobId as number, limit: 500 }),
     enabled: selectedJobId !== '',
   })
 
@@ -50,6 +51,7 @@ export default function CollectionResults({ initialJobId }: Props) {
     try {
       const result = await addToMasterList(selectedJobId as number)
       setAddResult(result)
+      queryClient.invalidateQueries({ queryKey: ['masterList'] })
     } catch {
       setAddError('마스터 리스트 추가 중 오류가 발생했습니다.')
     } finally {

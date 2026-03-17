@@ -88,10 +88,23 @@ def run_url_mode(config, crawler_config):
 def run_discovery_mode(config, crawler_config):
     """Keyword-based creator discovery mode."""
     keywords = config.get("keywords", [])
+    category_tags = config.get("category_tags", [])
     platform = config.get("platform", "youtube")
     target_count = config.get("target_count")
     subscriber_min = config.get("subscriber_min")
     subscriber_max = config.get("subscriber_max")
+
+    # Combine keywords with category tags for broader search
+    # e.g. keywords=["리뷰"], categories=["뷰티"] → "뷰티 리뷰"
+    if category_tags:
+        combined = []
+        for kw in keywords:
+            combined.append(kw)
+            for cat in category_tags:
+                if cat.lower() not in kw.lower():
+                    combined.append(f"{cat} {kw}")
+        keywords = combined
+        log(f"Combined keywords with categories: {keywords}")
 
     log(f"Starting discovery for keywords: {keywords} on {platform}" +
         (f" (target: {target_count} leads)" if target_count else ""))

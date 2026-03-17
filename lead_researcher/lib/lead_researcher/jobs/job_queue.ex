@@ -40,7 +40,7 @@ defmodule LeadResearcher.Jobs.JobQueue do
   def handle_cast({:cancel, job_id}, state) do
     case Map.get(state.running, job_id) do
       nil -> :ok
-      pid -> Process.exit(pid, :shutdown)
+      %{pid: pid} -> Process.exit(pid, :shutdown)
     end
 
     Jobs.update_job_status(job_id, "cancelled")
@@ -49,12 +49,22 @@ defmodule LeadResearcher.Jobs.JobQueue do
   end
 
   @impl true
-  def handle_info({ref, _result}, state) when is_reference(ref) do
+  def handle_info({ref, result}, state) when is_reference(ref) do
     {job_id, state} = pop_task_by_ref(ref, state)
 
     if job_id do
-      Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
-      Logger.info("Job #{job_id} completed successfully")
+      case result do
+        {:error, reason} ->
+          Jobs.update_job_status(job_id, "failed", %{
+            error_message: inspect(reason),
+            completed_at: DateTime.utc_now()
+          })
+          Logger.error("Job #{job_id} failed: #{inspect(reason)}")
+
+        _ ->
+          Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
+          Logger.info("Job #{job_id} completed successfully")
+      end
     end
 
     Process.demonitor(ref, [:flush])
@@ -114,7 +124,7 @@ defmodule LeadResearcher.Jobs.JobQueue do
 
     Jobs.update_job_status(job_id, "running", %{started_at: DateTime.utc_now()})
     Logger.info("Starting job #{job_id}")
-    %{state | running: Map.put(state.running, job_id, task.ref)}
+    %{state | running: Map.put(state.running, job_id, %{ref: task.ref, pid: task.pid})}
   end
 
   defp drain_queue(state) do
@@ -133,7 +143,7 @@ defmodule LeadResearcher.Jobs.JobQueue do
   end
 
   defp pop_task_by_ref(ref, state) do
-    case Enum.find(state.running, fn {_id, r} -> r == ref end) do
+    case Enum.find(state.running, fn {_id, %{ref: r}} -> r == ref end) do
       {job_id, _} -> {job_id, %{state | running: Map.delete(state.running, job_id)}}
       nil -> {nil, state}
     end

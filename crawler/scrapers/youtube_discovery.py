@@ -82,10 +82,10 @@ class YouTubeDiscoveryScraper(BaseScraper):
             sub_text = ch.get("subscribers", "")
             sub_count = _parse_subscriber_text(sub_text)
 
-            # Apply subscriber filter
-            if subscriber_min and sub_count is not None and sub_count < subscriber_min:
+            # Apply subscriber filter (skip channels with unknown count when filter is set)
+            if subscriber_min and (sub_count is None or sub_count < subscriber_min):
                 continue
-            if subscriber_max and sub_count is not None and sub_count > subscriber_max:
+            if subscriber_max and (sub_count is None or sub_count > subscriber_max):
                 continue
 
             if not channel_url:

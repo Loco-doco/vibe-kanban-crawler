@@ -66,6 +66,7 @@ export default function Leads() {
       min_confidence: minConfidence || undefined,
       sort,
       order,
+      limit: 500,
     }),
   })
 

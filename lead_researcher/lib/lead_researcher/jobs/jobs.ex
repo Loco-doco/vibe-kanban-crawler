@@ -29,10 +29,18 @@ defmodule LeadResearcher.Jobs do
         _ -> nil
       end
 
+    keywords =
+      case Map.get(attrs, "keywords") || Map.get(attrs, :keywords) do
+        t when is_list(t) -> Jason.encode!(t)
+        t when is_binary(t) -> t
+        _ -> nil
+      end
+
     attrs =
       attrs
       |> Map.put("targets", targets)
       |> Map.put("category_tags", category_tags)
+      |> Map.put("keywords", keywords)
 
     %Job{}
     |> Job.changeset(attrs)
