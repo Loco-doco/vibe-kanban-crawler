@@ -1,38 +1,47 @@
 import { NavLink } from 'react-router-dom'
 
-interface SidebarProps {
-  open: boolean
-  onClose: () => void
+interface NavItem {
+  to: string
+  icon: string
+  label: string
+  badge?: string
+  badgeClass?: string
+  disabled?: boolean
 }
 
-const navSections = [
+const navSections: { label: string; items: NavItem[] }[] = [
   {
-    label: '메인',
+    label: '',
     items: [
       { to: '/', icon: '\u{1F4CA}', label: '대시보드' },
-      { to: '/leads', icon: '\u{1F465}', label: '리드 관리', badge: '1,247' },
-    ],
-  },
-  {
-    label: '아웃바운드',
-    items: [
-      { to: '/campaigns', icon: '\u2709\uFE0F', label: '이메일 캠페인' },
-      { to: '/templates', icon: '\u{1F4C4}', label: '이메일 템플릿' },
-      { to: '/sequences', icon: '\u{1F504}', label: '시퀀스' },
     ],
   },
   {
     label: '리서치',
     items: [
-      { to: '/jobs', icon: '\u{1F50D}', label: '크롤링 작업', badge: '3 실행 중', badgeClass: 'success' },
-      { to: '/research', icon: '\u{1F9F2}', label: '리서치 도구' },
+      { to: '/collection', icon: '\u{1F50D}', label: '리드 수집' },
+    ],
+  },
+  {
+    label: '리드',
+    items: [
+      { to: '/leads', icon: '\u{1F465}', label: '전체 리드' },
+      { to: '/master-list', icon: '\u{1F4CB}', label: '마스터 리스트' },
+    ],
+  },
+  {
+    label: '아웃리치',
+    items: [
+      { to: '/campaigns', icon: '\u2709\uFE0F', label: '캠페인', disabled: true },
+      { to: '/templates', icon: '\u{1F4C4}', label: '템플릿', disabled: true },
+      { to: '/sequences', icon: '\u{1F504}', label: '시퀀스', disabled: true },
     ],
   },
   {
     label: '분석',
     items: [
-      { to: '/reports', icon: '\u{1F4C8}', label: '리포트' },
-      { to: '/performance', icon: '\u{1F3AF}', label: '성과 분석' },
+      { to: '/reports', icon: '\u{1F4C8}', label: '리포트', disabled: true },
+      { to: '/performance', icon: '\u{1F3AF}', label: '성과 분석', disabled: true },
     ],
   },
 ]
@@ -41,6 +50,11 @@ const bottomItems = [
   { to: '/settings', icon: '\u2699\uFE0F', label: '설정' },
   { to: '/help', icon: '\u2753', label: '도움말' },
 ]
+
+interface SidebarProps {
+  open: boolean
+  onClose: () => void
+}
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   return (
@@ -55,18 +69,25 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
       <nav className="sidebar-nav">
         {navSections.map((section) => (
-          <div className="nav-section" key={section.label}>
-            <span className="nav-section-label">{section.label}</span>
+          <div className="nav-section" key={section.label || '_top'}>
+            {section.label && (
+              <span className="nav-section-label">{section.label}</span>
+            )}
             {section.items.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                className={({ isActive }) =>
+                  `nav-item${isActive ? ' active' : ''}${item.disabled ? ' disabled' : ''}`
+                }
                 onClick={onClose}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
+                {item.disabled && (
+                  <span className="nav-lock" title="곧 추가될 기능입니다">{'\u{1F512}'}</span>
+                )}
                 {item.badge && (
                   <span className={`nav-badge${item.badgeClass ? ` ${item.badgeClass}` : ''}`}>
                     {item.badge}

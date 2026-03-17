@@ -1,12 +1,12 @@
 import { Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import Collection from './pages/Collection'
 import Leads from './pages/Leads'
+import MasterList from './pages/MasterList'
 import Campaigns from './pages/Campaigns'
 import Templates from './pages/Templates'
 import Sequences from './pages/Sequences'
-import Jobs from './pages/Jobs'
-import Research from './pages/Research'
 import Reports from './pages/Reports'
 import Performance from './pages/Performance'
 import Settings from './pages/Settings'
@@ -17,12 +17,12 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/collection" element={<Collection />} />
         <Route path="/leads" element={<Leads />} />
+        <Route path="/master-list" element={<MasterList />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/templates" element={<Templates />} />
         <Route path="/sequences" element={<Sequences />} />
-        <Route path="/jobs" element={<Jobs />} />
-        <Route path="/research" element={<Research />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/performance" element={<Performance />} />
         <Route path="/settings" element={<Settings />} />

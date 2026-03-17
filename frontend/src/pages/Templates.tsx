@@ -1,3 +1,10 @@
+const ComingSoonBanner = () => (
+  <div className="coming-soon-banner">
+    <span className="coming-soon-banner-icon">{'\u{1F6A7}'}</span>
+    <span>이 기능은 현재 개발 중입니다. 아래는 UI 미리보기입니다.</span>
+  </div>
+)
+
 export default function Templates() {
   const templates = [
     { title: '첫 번째 협업 제안', preview: '안녕하세요, {channel_name} 채널을 운영하고 계신 {name}님. 저희는 {company}에서 연락드립니다. {name}님의 콘텐츠를 통해 저희 제품을 소개해주실 의향이 있으신지 문의드립니다...', used: 156, openRate: '68%', modified: '3일 전' },
@@ -8,9 +15,10 @@ export default function Templates() {
 
   return (
     <>
+      <ComingSoonBanner />
       <div className="page-header">
         <div>
-          <h2>이메일 템플릿</h2>
+          <h2>템플릿</h2>
           <p className="page-header-sub">자주 사용하는 이메일 양식을 저장하고 재사용하세요</p>
         </div>
         <div className="page-header-actions">
