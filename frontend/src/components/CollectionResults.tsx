@@ -1,0 +1,170 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { getJobs } from '../api/jobs'
+import { getLeads } from '../api/leads'
+import { addToMasterList } from '../api/masterList'
+import StatusBadge from './StatusBadge'
+import type { Job, Lead } from '../types'
+import { PLATFORM_LABELS } from '../types'
+
+export default function CollectionResults() {
+  const [selectedJobId, setSelectedJobId] = useState<number | ''>('')
+
+  const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
+  const completedJobs = jobs?.filter((j: Job) => j.status === 'completed') || []
+
+  const { data: leads, isLoading: leadsLoading } = useQuery({
+    queryKey: ['leads', { job_id: selectedJobId }],
+    queryFn: () => getLeads({ job_id: selectedJobId as number }),
+    enabled: selectedJobId !== '',
+  })
+
+  const selectedJob = jobs?.find((j: Job) => j.id === selectedJobId)
+
+  const handleExportCsv = () => {
+    if (!selectedJobId) return
+    window.open(`/api/leads/export/csv?job_id=${selectedJobId}`, '_blank')
+  }
+
+  const handleAddToMasterList = async () => {
+    if (!selectedJobId) return
+    try {
+      const result = await addToMasterList(selectedJobId as number)
+      alert(`마스터 리스트에 ${result.added}건 추가되었습니다.${result.duplicates.length > 0 ? ` (중복 ${result.duplicates.length}건)` : ''}`)
+    } catch {
+      alert('마스터 리스트 추가 중 오류가 발생했습니다.')
+    }
+  }
+
+  const formatSubscribers = (count: number | null) => {
+    if (!count) return '-'
+    if (count >= 10000) return `${(count / 10000).toFixed(1)}만`
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}천`
+    return String(count)
+  }
+
+  const confidenceClass = (score: number) => {
+    if (score >= 0.7) return 'high'
+    if (score >= 0.4) return 'mid'
+    return 'low'
+  }
+
+  // Summary metrics for selected job
+  const emailCount = leads?.filter((l: Lead) => l.email).length || 0
+  const avgConfidence = leads?.length
+    ? leads.reduce((sum: number, l: Lead) => sum + l.confidence_score, 0) / leads.length
+    : 0
+
+  return (
+    <div className="results-wrap">
+      {/* Job selector */}
+      <div className="results-selector">
+        <select
+          className="results-select"
+          value={selectedJobId}
+          onChange={(e) => setSelectedJobId(e.target.value ? Number(e.target.value) : '')}
+        >
+          <option value="">작업을 선택하세요</option>
+          {completedJobs.map((job: Job) => (
+            <option key={job.id} value={job.id}>
+              {job.label || `작업 #${job.id}`} — 리드 {job.total_leads_found}건
+            </option>
+          ))}
+        </select>
+
+        {selectedJobId && (
+          <div className="results-actions">
+            <button className="btn btn-secondary" onClick={handleAddToMasterList}>
+              {'\u{1F4CB}'} 마스터 리스트 추가
+            </button>
+            <button className="btn btn-secondary" onClick={handleExportCsv}>
+              {'\u2B07\uFE0F'} CSV 내보내기
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!selectedJobId && (
+        <div className="empty-state">
+          <span className="empty-state-icon">{'\u{1F4C2}'}</span>
+          <h3>작업을 선택하세요</h3>
+          <p>위 드롭다운에서 완료된 작업을 선택하면 수집 결과를 확인할 수 있습니다</p>
+        </div>
+      )}
+
+      {selectedJobId && selectedJob && (
+        <>
+          {/* Metrics */}
+          <div className="results-metrics">
+            <div className="results-metric">
+              <span className="results-metric-value">{leads?.length || 0}</span>
+              <span className="results-metric-label">총 수집</span>
+            </div>
+            <div className="results-metric">
+              <span className="results-metric-value">{emailCount}</span>
+              <span className="results-metric-label">이메일 확보</span>
+            </div>
+            <div className="results-metric">
+              <span className="results-metric-value">
+                {leads?.length ? Math.round((emailCount / leads.length) * 100) : 0}%
+              </span>
+              <span className="results-metric-label">이메일 확보율</span>
+            </div>
+            <div className="results-metric">
+              <span className="results-metric-value">{Math.round(avgConfidence * 100)}%</span>
+              <span className="results-metric-label">평균 정확도</span>
+            </div>
+          </div>
+
+          {/* Table */}
+          {leadsLoading ? (
+            <div className="loading-state">불러오는 중...</div>
+          ) : !leads?.length ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">{'\u{1F50D}'}</span>
+              <h3>수집된 리드가 없습니다</h3>
+              <p>이 작업에서는 리드가 발견되지 않았습니다</p>
+            </div>
+          ) : (
+            <div className="card" style={{ marginTop: 0 }}>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>이메일</th>
+                      <th>플랫폼</th>
+                      <th>채널명</th>
+                      <th>구독자</th>
+                      <th>정확도</th>
+                      <th>상태</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads.map((lead: Lead) => (
+                      <tr key={lead.id}>
+                        <td className="email-cell">{lead.email || '-'}</td>
+                        <td>
+                          <span className={`platform-badge ${lead.platform}`}>
+                            {PLATFORM_LABELS[lead.platform] || lead.platform}
+                          </span>
+                        </td>
+                        <td>{lead.channel_name || '-'}</td>
+                        <td>{formatSubscribers(lead.subscriber_count)}</td>
+                        <td>
+                          <span className={`confidence ${confidenceClass(lead.confidence_score)}`}>
+                            {Math.round(lead.confidence_score * 100)}%
+                          </span>
+                        </td>
+                        <td><StatusBadge status={lead.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
