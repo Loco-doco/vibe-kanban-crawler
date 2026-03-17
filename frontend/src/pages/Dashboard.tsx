@@ -145,7 +145,7 @@ export default function Dashboard() {
                   <div className="job-status-item" key={job.id}>
                     <div className="job-status-info">
                       <span className={`status-dot ${job.status === 'running' ? 'running' : job.status === 'completed' ? 'completed' : 'pending'}`}></span>
-                      <span>{job.label || `탐색 #${job.id}`} ({job.targets.length}개 대상)</span>
+                      <span>{job.label || `탐색 #${job.id}`} ({job.mode === 'discovery' && job.keywords?.length ? `${job.keywords.length}개 키워드` : `${job.targets.length}개 대상`})</span>
                     </div>
                     {job.status === 'running' && job.progress && (
                       <>

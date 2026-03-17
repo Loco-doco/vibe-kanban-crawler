@@ -43,5 +43,22 @@ defmodule LeadResearcher.Jobs.Job do
     |> validate_number(:delay_ms, greater_than_or_equal_to: 0)
     |> validate_number(:max_depth, greater_than_or_equal_to: 1, less_than_or_equal_to: 5)
     |> validate_number(:target_count, greater_than_or_equal_to: 1)
+    |> validate_keywords_for_discovery()
+  end
+
+  defp validate_keywords_for_discovery(changeset) do
+    case get_field(changeset, :mode) do
+      "discovery" ->
+        keywords = get_field(changeset, :keywords)
+
+        if is_nil(keywords) or keywords == "" or keywords == "[]" do
+          add_error(changeset, :keywords, "검색 키워드는 필수입니다")
+        else
+          changeset
+        end
+
+      _ ->
+        changeset
+    end
   end
 end
