@@ -1014,6 +1014,63 @@ body {
   border-radius: 9999px;
 }
 
+/* ===== Effort Level Selector ===== */
+.effort-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.effort-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: white;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.effort-option:hover { border-color: var(--primary-500); }
+
+.effort-option.active {
+  border-color: var(--primary-600);
+  background: var(--primary-50);
+}
+
+.effort-option-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.effort-option.active .effort-option-label { color: var(--primary-600); }
+
+.effort-option-desc {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  line-height: 1.4;
+}
+
+/* ===== Input with Unit ===== */
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-unit .setup-input { flex: 1; }
+
+.input-unit {
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
 /* ===== Tab Badge ===== */
 .tab-badge {
   font-size: 0.7rem;

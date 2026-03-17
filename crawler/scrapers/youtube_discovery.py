@@ -2,18 +2,23 @@
 YouTube Discovery Scraper — keyword-based channel search.
 
 Uses youtubesearchpython to find YouTube channels by search keyword,
-then delegates to YouTubeScraper for email extraction from each channel.
+then uses EmailFinder to search for emails across multiple sources
+(YouTube about page, web search, aggregator sites, creator websites).
 """
-import sys
 import time
+import json
 
 from scrapers.base import BaseScraper
-from scrapers.youtube import YouTubeScraper
+from scrapers.email_finder import EmailFinder
 
 try:
     from youtubesearchpython import ChannelsSearch
 except ImportError:
     ChannelsSearch = None
+
+
+def _log(message):
+    print(json.dumps({"type": "log", "message": message}), flush=True)
 
 
 def _parse_subscriber_text(text):
@@ -35,12 +40,12 @@ def _parse_subscriber_text(text):
 
 
 class YouTubeDiscoveryScraper(BaseScraper):
-    """Search YouTube channels by keyword, then extract emails."""
+    """Search YouTube channels by keyword, then find emails via multi-source search."""
 
     def scrape(self, query, subscriber_min=None, subscriber_max=None):
         """
         Generator: search YouTube channels by keyword,
-        filter by subscriber range, then extract emails via YouTubeScraper.
+        filter by subscriber range, then find emails using EmailFinder.
         """
         if ChannelsSearch is None:
             print(
@@ -49,27 +54,22 @@ class YouTubeDiscoveryScraper(BaseScraper):
             )
             return
 
-        print(
-            f'{{"type": "log", "message": "Searching YouTube channels for: {query}"}}',
-            flush=True,
-        )
+        _log(f"Searching YouTube channels for: {query}")
 
         try:
             search = ChannelsSearch(query, limit=40, region="KR", language="ko")
             results = search.result().get("result", [])
         except Exception as e:
             print(
-                f'{{"type": "error", "message": "YouTube search failed: {e}"}}',
+                json.dumps({"type": "error", "message": f"YouTube search failed: {e}"}),
                 flush=True,
             )
             return
 
-        print(
-            f'{{"type": "log", "message": "Found {len(results)} channels for \\"{query}\\""}}',
-            flush=True,
-        )
+        _log(f"Found {len(results)} channels for \"{query}\"")
 
-        yt_scraper = YouTubeScraper({
+        # EmailFinder uses multi-source strategy based on effort level (max_depth)
+        email_finder = EmailFinder({
             "max_retries": self.max_retries,
             "delay_ms": self.delay_ms,
             "max_depth": self.max_depth,
@@ -78,6 +78,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
         for ch in results:
             channel_title = ch.get("title", "")
             channel_url = ch.get("link", "")
+            channel_id = ch.get("id", "")
             sub_text = ch.get("subscribers", "")
             sub_count = _parse_subscriber_text(sub_text)
 
@@ -90,14 +91,11 @@ class YouTubeDiscoveryScraper(BaseScraper):
             if not channel_url:
                 continue
 
-            print(
-                f'{{"type": "log", "message": "Scraping discovered channel: {channel_title} ({sub_text})"}}',
-                flush=True,
-            )
+            _log(f"Finding emails for: {channel_title} ({sub_text})")
 
-            # Use existing YouTubeScraper to extract emails
+            # Use EmailFinder for multi-source email search
             found_any = False
-            for lead in yt_scraper.scrape(channel_url):
+            for lead in email_finder.find_emails(channel_title, channel_url, channel_id):
                 lead["channel_name"] = lead.get("channel_name") or channel_title
                 lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
                 found_any = True

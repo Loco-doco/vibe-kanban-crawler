@@ -13,6 +13,24 @@ interface Props {
   onCreated?: () => void
 }
 
+const EFFORT_LEVELS = [
+  {
+    value: 1,
+    label: '\uBE60\uB978 \uD0D0\uC0C9',
+    desc: 'YouTube \uCC44\uB110 \uC815\uBCF4\uB9CC \uD655\uC778\uD569\uB2C8\uB2E4. \uBE60\uB974\uC9C0\uB9CC \uC774\uBA54\uC77C\uC744 \uBABB \uCC3E\uC744 \uD655\uB960\uC774 \uB192\uC2B5\uB2C8\uB2E4.',
+  },
+  {
+    value: 2,
+    label: '\uD45C\uC900 \uD0D0\uC0C9',
+    desc: 'YouTube + \uC6F9 \uAC80\uC0C9\uC744 \uD1B5\uD574 \uC774\uBA54\uC77C\uC744 \uCC3E\uC2B5\uB2C8\uB2E4. \uB300\uBD80\uBD84\uC758 \uACBD\uC6B0 \uC774 \uC124\uC815\uC744 \uCD94\uCC9C\uD569\uB2C8\uB2E4.',
+  },
+  {
+    value: 3,
+    label: '\uC2EC\uCE35 \uD0D0\uC0C9',
+    desc: 'YouTube, \uC6F9 \uAC80\uC0C9, \uC678\uBD80 \uC0AC\uC774\uD2B8\uAE4C\uC9C0 \uBAA8\uB450 \uD0D0\uC0C9\uD569\uB2C8\uB2E4. \uC2DC\uAC04\uC774 \uB354 \uAC78\uB9AC\uC9C0\uB9CC \uC774\uBA54\uC77C \uD655\uBCF4\uC728\uC774 \uAC00\uC7A5 \uB192\uC2B5\uB2C8\uB2E4.',
+  },
+]
+
 export default function CollectionSetupForm({ onCreated }: Props) {
   const [label, setLabel] = useState('')
   const [keywordsText, setKeywordsText] = useState('')
@@ -22,6 +40,10 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [subscriberMin, setSubscriberMin] = useState('')
   const [subscriberMax, setSubscriberMax] = useState('')
   const [targetCount, setTargetCount] = useState('')
+  const [searchEffort, setSearchEffort] = useState(2)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [maxRetries, setMaxRetries] = useState('3')
+  const [delayMs, setDelayMs] = useState('2000')
 
   const queryClient = useQueryClient()
 
@@ -36,6 +58,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMin('')
       setSubscriberMax('')
       setTargetCount('')
+      setSearchEffort(2)
+      setMaxRetries('3')
+      setDelayMs('2000')
       onCreated?.()
     },
   })
@@ -69,9 +94,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         target_count: targetCount ? Number(targetCount) : 50,
         subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
         subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
-        max_retries: 3,
-        delay_ms: 2000,
-        max_depth: 3,
+        max_retries: Number(maxRetries) || 3,
+        delay_ms: Number(delayMs) || 2000,
+        max_depth: searchEffort,
       },
     })
   }
@@ -214,6 +239,72 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           />
           <span className="setup-help">이 수만큼 리드를 확보하면 탐색을 자동 중단합니다</span>
         </label>
+      </div>
+
+      {/* 탐색 강도 & 고급 설정 */}
+      <div className="setup-section">
+        <h4 className="setup-section-title">탐색 강도</h4>
+        <span className="setup-section-desc">이메일을 찾기 위해 얼마나 다양한 경로를 탐색할지 설정합니다</span>
+
+        <div className="effort-selector" style={{ marginTop: 12 }}>
+          {EFFORT_LEVELS.map((level) => (
+            <button
+              key={level.value}
+              type="button"
+              className={`effort-option${searchEffort === level.value ? ' active' : ''}`}
+              onClick={() => setSearchEffort(level.value)}
+            >
+              <span className="effort-option-label">{level.label}</span>
+              <span className="effort-option-desc">{level.desc}</span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className="btn-toggle"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          style={{ marginTop: 16 }}
+        >
+          <span className={`toggle-arrow${showAdvanced ? ' open' : ''}`}>{'\u25BC'}</span>
+          세부 설정
+        </button>
+
+        {showAdvanced && (
+          <div className="setup-row-2" style={{ marginTop: 12 }}>
+            <label className="setup-label">
+              재시도 횟수
+              <input
+                type="number"
+                className="setup-input"
+                value={maxRetries}
+                onChange={(e) => setMaxRetries(e.target.value)}
+                min={1}
+                max={10}
+              />
+              <span className="setup-help">
+                페이지 로딩에 실패했을 때 다시 시도하는 횟수입니다. 서버 오류나 네트워크 불안정 시 자동으로 재시도합니다.
+              </span>
+            </label>
+            <label className="setup-label">
+              요청 대기 시간
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  className="setup-input"
+                  value={Math.round(Number(delayMs) / 1000)}
+                  onChange={(e) => setDelayMs(String(Number(e.target.value) * 1000))}
+                  min={1}
+                  max={10}
+                />
+                <span className="input-unit">초</span>
+              </div>
+              <span className="setup-help">
+                각 페이지 요청 사이의 대기 시간입니다. 너무 짧으면 사이트에서 차단될 수 있고, 너무 길면 수집이 느려집니다.
+              </span>
+            </label>
+          </div>
+        )}
       </div>
 
       <button type="submit" className="btn btn-primary setup-submit" disabled={mutation.isPending || keywordCount === 0}>
