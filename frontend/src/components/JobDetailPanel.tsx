@@ -24,11 +24,18 @@ const TERMINATION_STYLES: Record<string, string> = {
   user_cancelled: 'neutral',
 }
 
+const PREVIEW_LIMIT = 10
+
 function formatSubscribers(count: number | null): string {
   if (!count) return '-'
   if (count >= 10000) return `${(count / 10000).toFixed(count % 10000 === 0 ? 0 : 1)}만`
   if (count >= 1000) return `${(count / 1000).toFixed(count % 1000 === 0 ? 0 : 1)}천`
   return count.toLocaleString()
+}
+
+function formatLeadTime(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 export default function JobDetailPanel({ job, onViewResults }: Props) {
@@ -58,7 +65,24 @@ export default function JobDetailPanel({ job, onViewResults }: Props) {
   }, [leads])
 
   const isDone = ['completed', 'completed_low_yield', 'failed', 'cancelled'].includes(job.status)
-  const canViewResults = isDone && job.total_leads_found > 0
+  const isActive = ['running', 'partial_results'].includes(job.status)
+  const hasLeads = (leads?.length || 0) > 0
+
+  // CTA rules
+  const ctaLabel = (() => {
+    if (!hasLeads) return null
+    if (isActive) return '중간 결과 보기 →'
+    if (isDone) return '결과 보기 →'
+    return null
+  })()
+
+  // Recent leads for preview (most recent first, limit to PREVIEW_LIMIT)
+  const recentLeads = useMemo(() => {
+    if (!leads?.length) return []
+    return [...leads]
+      .sort((a: Lead, b: Lead) => new Date(b.inserted_at).getTime() - new Date(a.inserted_at).getTime())
+      .slice(0, PREVIEW_LIMIT)
+  }, [leads])
 
   const keywords: string[] = job.keywords || []
   const categoryTags: string[] = job.category_tags || []
@@ -115,7 +139,7 @@ export default function JobDetailPanel({ job, onViewResults }: Props) {
             </div>
           )}
           <div className="job-detail-condition">
-            <span className="job-detail-condition-label">수집 결과</span>
+            <span className="job-detail-condition-label">이메일 확보</span>
             <span className="job-detail-condition-value">
               {job.total_leads_found} / {job.target_count ?? '-'}건
             </span>
@@ -187,20 +211,80 @@ export default function JobDetailPanel({ job, onViewResults }: Props) {
         </div>
       )}
 
+      {/* 현재 확보 리드 미리보기 (running/partial_results, 읽기 전용) */}
+      {!isDone && leads && leads.length > 0 && (
+        <div className="job-detail-section">
+          <div className="job-detail-section-title">
+            현재 확보 리드
+            <span className="job-detail-section-count">
+              {leads.length > PREVIEW_LIMIT
+                ? `총 ${leads.length}건 중 최근 ${PREVIEW_LIMIT}건 표시`
+                : `${leads.length}건`}
+            </span>
+          </div>
+          <div className="lead-preview-table-wrap">
+            <table className="lead-preview-table">
+              <thead>
+                <tr>
+                  <th>채널명</th>
+                  <th>이메일</th>
+                  <th>출처</th>
+                  <th>키워드</th>
+                  <th>수집 시각</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLeads.map((lead: Lead) => (
+                  <tr key={lead.id} className={lead.email ? '' : 'lead-no-email'}>
+                    <td>
+                      {lead.channel_url ? (
+                        <a href={lead.channel_url} target="_blank" rel="noopener noreferrer" className="channel-link">
+                          {lead.channel_name || '채널 보기'}
+                        </a>
+                      ) : (
+                        lead.channel_name || '-'
+                      )}
+                    </td>
+                    <td className="lead-email-cell">
+                      {lead.email
+                        ? <span className="lead-email-badge has-email">확보</span>
+                        : <span className="lead-email-badge no-email">미확보</span>}
+                    </td>
+                    <td>
+                      {lead.source_type && (
+                        <span className="source-badge-sm">
+                          {SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}
+                        </span>
+                      )}
+                    </td>
+                    <td className="lead-keyword-cell">
+                      {lead.discovery_keyword || '-'}
+                    </td>
+                    <td className="lead-time-cell">
+                      {formatLeadTime(lead.inserted_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {leads && leads.length === 0 && isDone && (
         <div className="job-detail-section">
           <div className="job-detail-empty">수집된 리드가 없습니다</div>
         </div>
       )}
 
-      {/* 결과 보기 CTA */}
-      {canViewResults && onViewResults && (
+      {/* CTA: 상태/리드 수 조건별 */}
+      {ctaLabel && onViewResults && (
         <div className="job-detail-cta">
           <button
             className="btn btn-primary btn-small"
             onClick={() => onViewResults(job.id)}
           >
-            결과 보기 →
+            {ctaLabel}
           </button>
         </div>
       )}

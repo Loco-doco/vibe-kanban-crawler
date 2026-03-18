@@ -4,10 +4,8 @@ import { getJobs, cancelJob } from '../api/jobs'
 import StatusBadge from './StatusBadge'
 import JobDetailPanel from './JobDetailPanel'
 import type { Job, JobStatus } from '../types'
-import { TERMINATION_LABELS } from '../types'
 
 const ACTIVE_STATUSES: JobStatus[] = ['draft', 'queued', 'running', 'partial_results']
-const DONE_STATUSES: JobStatus[] = ['completed', 'completed_low_yield', 'failed', 'cancelled']
 
 interface Props {
   onViewResults?: (jobId: number) => void
@@ -30,7 +28,6 @@ export default function JobMonitor({ onViewResults }: Props) {
   }
 
   const activeJobs = jobs?.filter((j) => (ACTIVE_STATUSES as string[]).includes(j.status)) || []
-  const doneJobs = jobs?.filter((j) => (DONE_STATUSES as string[]).includes(j.status)).slice(0, 8) || []
 
   const formatDuration = (job: Job) => {
     if (!job.started_at) return '-'
@@ -56,12 +53,12 @@ export default function JobMonitor({ onViewResults }: Props) {
     return <div className="loading-state">탐색 목록을 불러오는 중...</div>
   }
 
-  const renderCard = (job: Job, isDone: boolean) => (
-    <div key={job.id} className={`campaign-card ${job.status}${isDone ? ' done' : ''}`}>
+  const renderCard = (job: Job) => (
+    <div key={job.id} className={`campaign-card ${job.status}`}>
       {/* Header: 탐색명 + StatusBadge + Chevron */}
       <div className="campaign-header" onClick={() => toggleExpand(job.id)} style={{ cursor: 'pointer' }}>
         <div className="campaign-title">
-          {!isDone && <span className={`status-dot ${job.status}`} />}
+          <span className={`status-dot ${job.status}`} />
           <span>{job.label || `탐색 #${job.id}`}</span>
         </div>
         <div className="campaign-header-right">
@@ -73,9 +70,9 @@ export default function JobMonitor({ onViewResults }: Props) {
       {/* Meta: 수집 현황 + 시각 */}
       <div className="campaign-meta">
         <span className="campaign-meta-primary">
-          {job.progress?.collected ?? job.total_leads_found} / {job.target_count ?? '-'}건
+          이메일 {job.progress?.collected ?? job.total_leads_found} / {job.target_count ?? '-'}건
         </span>
-        {!isDone && <span>{formatDuration(job)}</span>}
+        <span>{formatDuration(job)}</span>
         <span>생성 {formatTime(job.inserted_at)}</span>
         <span>갱신 {formatTime(job.updated_at)}</span>
       </div>
@@ -100,23 +97,6 @@ export default function JobMonitor({ onViewResults }: Props) {
         </div>
       )}
 
-      {/* 종료 사유 요약 (카드 레벨: 짧은 라벨) */}
-      {job.termination_reason && isDone && (
-        <div className="campaign-termination">
-          <span className="termination-label">종료:</span>
-          <span className={`termination-badge ${job.termination_reason}`}>
-            {TERMINATION_LABELS[job.termination_reason] || job.termination_reason}
-          </span>
-        </div>
-      )}
-
-      {/* 실패 에러 메시지 */}
-      {job.status === 'failed' && job.error_message && (
-        <div className="campaign-error">
-          {job.error_message}
-        </div>
-      )}
-
       {/* Actions: Cancel (카드 레벨에 유지) */}
       {canCancel(job.status) && (
         <div className="campaign-actions">
@@ -138,25 +118,16 @@ export default function JobMonitor({ onViewResults }: Props) {
 
   return (
     <div className="monitor-wrap">
-      {activeJobs.length > 0 && (
+      {activeJobs.length > 0 ? (
         <div className="monitor-section">
           <h4 className="monitor-section-title">
             진행 중 <span className="monitor-count">{activeJobs.length}</span>
           </h4>
-          {activeJobs.map((job) => renderCard(job, false))}
+          {activeJobs.map((job) => renderCard(job))}
         </div>
-      )}
-
-      {doneJobs.length > 0 && (
-        <div className="monitor-section">
-          <h4 className="monitor-section-title">최근 완료</h4>
-          {doneJobs.map((job) => renderCard(job, true))}
-        </div>
-      )}
-
-      {activeJobs.length === 0 && doneJobs.length === 0 && (
+      ) : (
         <div className="empty-state">
-          <h3>탐색 내역이 없습니다</h3>
+          <h3>진행 중인 탐색이 없습니다</h3>
           <p>"새 탐색 만들기" 탭에서 시작하세요</p>
         </div>
       )}

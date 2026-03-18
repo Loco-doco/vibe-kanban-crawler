@@ -1705,6 +1705,70 @@ body {
   padding: 8px 0;
 }
 
+/* Section count (e.g. "총 N건 중 최근 10건 표시") */
+.job-detail-section-count {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--gray-400);
+  margin-left: 8px;
+}
+
+/* Lead Preview Table */
+.lead-preview-table-wrap { overflow-x: auto; }
+.lead-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.lead-preview-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--gray-500);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+.lead-preview-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--gray-50);
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+.lead-preview-table tr.lead-no-email td { color: var(--gray-400); }
+.lead-preview-table a.channel-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.lead-preview-table a.channel-link:hover { text-decoration: underline; }
+
+/* Email badge */
+.lead-email-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.lead-email-badge.has-email { background: var(--green-50, #f0fdf4); color: var(--green, #10b981); }
+.lead-email-badge.no-email { background: var(--gray-50); color: var(--gray-400); }
+
+/* Source badge small */
+.source-badge-sm {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  white-space: nowrap;
+}
+
+.lead-keyword-cell { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lead-time-cell { white-space: nowrap; color: var(--gray-400); font-size: 0.72rem; }
+.lead-email-cell { white-space: nowrap; }
+
 @media (max-width: 768px) {
   .setup-row-2 { grid-template-columns: 1fr; }
   .setup-row-3 { grid-template-columns: 1fr; }
