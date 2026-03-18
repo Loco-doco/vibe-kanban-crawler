@@ -2,6 +2,9 @@ defmodule LeadResearcher.PromptParser do
   @moduledoc """
   Parses natural language prompts into structured search parameters
   using Claude API via a Python subprocess.
+
+  API key resolution: ANTHROPIC_API_KEY environment variable only.
+  If not set, the Python parser falls back to rule-based parsing.
   """
   require Logger
 
@@ -9,7 +12,12 @@ defmodule LeadResearcher.PromptParser do
   @timeout 30_000
 
   def parse(prompt) when is_binary(prompt) and byte_size(prompt) > 0 do
-    api_key = resolve_api_key()
+    api_key = System.get_env("ANTHROPIC_API_KEY") || ""
+
+    if api_key == "" do
+      Logger.warning("[PromptParser] ANTHROPIC_API_KEY not set — will use fallback parser")
+    end
+
     config = Jason.encode!(%{"prompt" => prompt, "api_key" => api_key})
     python = System.find_executable("python3") || "python3"
     script = Path.join(@crawler_dir, "prompt_parser.py")
@@ -35,45 +43,13 @@ defmodule LeadResearcher.PromptParser do
         parse_output(buffer)
 
       {^port, {:exit_status, code}} ->
-        Logger.error("Prompt parser exited with code #{code}: #{buffer}")
+        Logger.error("[PromptParser] Python process exited with code #{code}: #{buffer}")
         {:error, "파싱 실패 (exit code: #{code})"}
     after
       @timeout ->
         Port.close(port)
+        Logger.error("[PromptParser] Timeout after #{@timeout}ms")
         {:error, "파싱 시간 초과"}
-    end
-  end
-
-  defp resolve_api_key do
-    # 1. Environment variable (highest priority)
-    case System.get_env("ANTHROPIC_API_KEY") do
-      key when is_binary(key) and key != "" ->
-        key
-
-      _ ->
-        # 2. macOS Keychain: Claude Code OAuth token (local development)
-        read_keychain_token()
-    end
-  end
-
-  defp read_keychain_token do
-    case System.cmd(
-           "security",
-           ["find-generic-password", "-s", "Claude Code-credentials", "-w"],
-           stderr_to_stdout: true
-         ) do
-      {json, 0} ->
-        case Jason.decode(String.trim(json)) do
-          {:ok, %{"claudeAiOauth" => %{"accessToken" => token}}}
-          when is_binary(token) and token != "" ->
-            token
-
-          _ ->
-            ""
-        end
-
-      _ ->
-        ""
     end
   end
 
@@ -90,14 +66,20 @@ defmodule LeadResearcher.PromptParser do
       {:ok, %{"error" => error}} ->
         {:error, error}
 
-      {:ok, %{"keywords" => keywords} = result} when is_list(keywords) and length(keywords) > 0 ->
+      {:ok, %{"keywords" => keywords, "parse_mode" => mode} = result}
+      when is_list(keywords) and length(keywords) > 0 ->
+        Logger.info("[PromptParser] parse_mode=#{mode}, keywords=#{inspect(keywords)}")
+        {:ok, result}
+
+      {:ok, %{"keywords" => keywords} = result}
+      when is_list(keywords) and length(keywords) > 0 ->
         {:ok, result}
 
       {:ok, _} ->
         {:error, "키워드를 추출할 수 없습니다"}
 
       {:error, _} ->
-        Logger.error("Failed to parse prompt parser output: #{buffer}")
+        Logger.error("[PromptParser] Failed to parse output: #{buffer}")
         {:error, "AI 응답 파싱 실패"}
     end
   end

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
-Prompt Parser — uses Claude API to extract structured search parameters
-from a natural language description.
+Prompt Parser — extracts structured search parameters from natural language.
 
-Reads JSON from stdin: {"prompt": "...", "api_key": "..."}
-Outputs JSON to stdout: {"keywords": [...], "category_tags": [...], ...}
+Protocol:
+  stdin:  {"prompt": "...", "api_key": "..."}
+  stdout: {"keywords": [...], "parse_mode": "ai"|"fallback", ...}
+
+Routes:
+  api_key present → AI parse (Claude API) → on failure → fallback
+  api_key absent  → fallback parse (rule-based)
 """
 import sys
 import json
-import requests
+import re
 
 SYSTEM_PROMPT = """당신은 YouTube 크리에이터 탐색 전문가입니다.
 사용자가 자연어로 찾고 싶은 크리에이터를 설명하면, YouTube에서 실제로 그런 크리에이터를 발견할 수 있는 **검색 전략**을 설계합니다.
@@ -47,21 +51,103 @@ SYSTEM_PROMPT = """당신은 YouTube 크리에이터 탐색 전문가입니다.
 """
 
 
+def log(message):
+    """Debug log to stderr (captured by Elixir but not mixed with JSON output)."""
+    print(f"[prompt_parser] {message}", file=sys.stderr, flush=True)
+
+
+# ────────────────────────────────────────────
+# AI Parse: Claude API
+# ────────────────────────────────────────────
+
+def ai_parse(prompt, api_key):
+    """
+    Call Anthropic Messages API to parse prompt.
+    Returns (result_dict, None) on success, (None, error_string) on failure.
+    """
+    import requests
+
+    log(f"ai_parse: calling Claude API (prompt length={len(prompt)})")
+
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 512,
+                "system": SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=30,
+        )
+    except requests.exceptions.Timeout:
+        log("ai_parse: TIMEOUT — API did not respond within 30s")
+        return None, "timeout"
+    except requests.exceptions.ConnectionError as e:
+        log(f"ai_parse: CONNECTION_ERROR — {e}")
+        return None, "connection_error"
+    except requests.exceptions.RequestException as e:
+        log(f"ai_parse: REQUEST_ERROR — {e}")
+        return None, "request_error"
+
+    if response.status_code != 200:
+        log(f"ai_parse: API_ERROR — status={response.status_code} body={response.text[:200]}")
+        return None, f"api_error_{response.status_code}"
+
+    data = response.json()
+    text = data.get("content", [{}])[0].get("text", "")
+
+    if not text:
+        log("ai_parse: EMPTY_RESPONSE — no text in API response")
+        return None, "empty_response"
+
+    # Strip markdown code blocks if present
+    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    stripped = re.sub(r"\n?```\s*$", "", stripped)
+
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        log(f"ai_parse: JSON_PARSE_ERROR — raw text: {text[:200]}")
+        return None, "json_parse_error"
+
+    keywords = parsed.get("keywords", [])
+    if not keywords:
+        log("ai_parse: NO_KEYWORDS — AI returned empty keywords")
+        return None, "no_keywords"
+
+    result = {
+        "keywords": keywords[:5],
+        "category_tags": parsed.get("category_tags", []),
+        "subscriber_min": parsed.get("subscriber_min"),
+        "subscriber_max": parsed.get("subscriber_max"),
+        "extra_conditions": parsed.get("extra_conditions"),
+        "parse_mode": "ai",
+    }
+    log(f"ai_parse: OK — keywords={result['keywords']}")
+    return result, None
+
+
+# ────────────────────────────────────────────
+# Fallback Parse: Rule-based (no AI)
+# ────────────────────────────────────────────
+
 def fallback_parse(prompt):
     """Parse prompt locally without AI — extract keywords, subscriber range, categories."""
-    import re
-
+    log(f"fallback_parse: starting (prompt length={len(prompt)})")
     text = prompt.strip()
 
     # --- Extract subscriber range ---
     subscriber_min = None
     subscriber_max = None
 
-    # Korean number units
     units = {"만": 10_000, "십만": 100_000, "백만": 1_000_000, "천만": 10_000_000, "억": 100_000_000}
 
-    # Pattern: "구독자 5만~50만", "구독자 1만 이상", "구독자 100만 이하"
-    # Also: "5만에서 50만", "5만 ~ 50만", "5만~50만 사이"
     range_pattern = r"(\d+(?:\.\d+)?)\s*(만|십만|백만|천만|억)?\s*(?:명)?\s*(?:~|에서|부터|-)\s*(\d+(?:\.\d+)?)\s*(만|십만|백만|천만|억)?\s*(?:명)?"
     m = re.search(range_pattern, text)
     if m:
@@ -69,27 +155,23 @@ def fallback_parse(prompt):
         min_unit = units.get(m.group(2), 1) if m.group(2) else 1
         max_num = float(m.group(3))
         max_unit = units.get(m.group(4), 1) if m.group(4) else 1
-        # If max has no unit but min does, assume same unit
         if m.group(2) and not m.group(4):
             max_unit = min_unit
         subscriber_min = int(min_num * min_unit)
         subscriber_max = int(max_num * max_unit)
     else:
-        # "구독자 N만 이상" or "N만 이상"
         min_m = re.search(r"(\d+(?:\.\d+)?)\s*(만|십만|백만|천만|억)?\s*(?:명)?\s*이상", text)
         if min_m:
             num = float(min_m.group(1))
             unit = units.get(min_m.group(2), 1) if min_m.group(2) else 1
             subscriber_min = int(num * unit)
 
-        # "구독자 N만 이하" or "N만 이하" or "N만 미만"
         max_m = re.search(r"(\d+(?:\.\d+)?)\s*(만|십만|백만|천만|억)?\s*(?:명)?\s*(?:이하|미만)", text)
         if max_m:
             num = float(max_m.group(1))
             unit = units.get(max_m.group(2), 1) if max_m.group(2) else 1
             subscriber_max = int(num * unit)
 
-    # Size keywords → subscriber range
     size_map = {
         "소규모": (1_000, 50_000),
         "소형": (1_000, 50_000),
@@ -107,16 +189,12 @@ def fallback_parse(prompt):
             break
 
     # --- Remove noise phrases and extract meaningful keywords ---
-    # Remove subscriber-related text
     cleaned = re.sub(r"구독자\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:사이)?", "", text)
     cleaned = re.sub(r"구독자\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:이상|이하|미만)", "", cleaned)
     cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:사이)?", "", cleaned)
     cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:이상|이하|미만)", "", cleaned)
-
-    # Remove subscriber range text more aggressively (catch trailing particles)
     cleaned = re.sub(r"구독자[^,，\n]*?(?:이상|이하|미만|사이)[인은의를에]?\s*(?:곳|것|채널|데)?", "", cleaned)
 
-    # Remove filler words (longer first to avoid partial matches)
     filler = [
         "찾아주세요", "찾아보세요", "찾고 싶어", "알려주세요",
         "추천해주세요", "검색해주세요",
@@ -127,7 +205,6 @@ def fallback_parse(prompt):
         "소규모", "중소형", "중형", "대형", "메가",
         "채널인데", "채널이고", "채널인", "채널",
         "크리에이터", "유튜버",
-        # Sentence-level fillers
         "한국인", "한국",
         "콘텐츠를 올리거나", "콘텐츠를 만드는", "콘텐츠를 하는",
         "경험이 있는", "경험이 있거나", "경험 있는",
@@ -140,11 +217,9 @@ def fallback_parse(prompt):
     for word in filler:
         cleaned = cleaned.replace(word, " ")
 
-    # Remove single-char leftover particles (Korean postpositions/fillers)
     cleaned = re.sub(r"(?<!\S)[은는이가을를에서의로도인곳데중]\s", " ", cleaned)
     cleaned = re.sub(r"(?<!\S)[은는이가을를에서의로도인곳데중]$", "", cleaned)
 
-    # Split into meaningful segments by commas, newlines, periods, and conjunctions
     segments = re.split(r"[,，\n.。/]+", cleaned)
     keywords = []
     for seg in segments:
@@ -153,14 +228,11 @@ def fallback_parse(prompt):
         if seg and len(seg) >= 2:
             keywords.append(seg)
 
-    # Post-process: break very long keywords (>15 chars) into noun phrases
     final_keywords = []
     for kw in keywords:
         if len(kw) > 15:
-            # Try splitting by spaces and grouping into 2-3 word chunks
             words = kw.split()
             if len(words) >= 3:
-                # Take meaningful 2-word pairs
                 for i in range(0, len(words), 2):
                     chunk = " ".join(words[i:i+2])
                     if len(chunk) >= 2:
@@ -170,7 +242,6 @@ def fallback_parse(prompt):
         else:
             final_keywords.append(kw)
 
-    # Deduplicate
     seen = set()
     unique_keywords = []
     for kw in final_keywords:
@@ -178,9 +249,7 @@ def fallback_parse(prompt):
             seen.add(kw.lower())
             unique_keywords.append(kw)
 
-    # If no keywords extracted, use the first meaningful part of the original prompt
     if not unique_keywords:
-        # Take the first sentence/clause as a keyword
         first = re.split(r"[,，\n.。]", text)[0].strip()
         if first:
             unique_keywords = [first[:30]]
@@ -209,61 +278,22 @@ def fallback_parse(prompt):
                 category_tags.append(cat)
                 break
 
-    return {
+    result = {
         "keywords": unique_keywords[:5],
         "category_tags": category_tags,
         "subscriber_min": subscriber_min,
         "subscriber_max": subscriber_max,
         "extra_conditions": None,
+        "parse_mode": "fallback",
+        "_fallback": True,
     }
+    log(f"fallback_parse: OK — keywords={result['keywords']}")
+    return result
 
 
-def parse_prompt(prompt, api_key):
-    """Call Claude API to parse a natural language prompt into search parameters."""
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 512,
-            "system": SYSTEM_PROMPT,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=30,
-    )
-
-    if response.status_code != 200:
-        return {"error": f"Claude API error: {response.status_code} {response.text[:200]}"}
-
-    data = response.json()
-    text = data.get("content", [{}])[0].get("text", "")
-
-    # Strip markdown code blocks if present (```json ... ```)
-    import re as _re
-    stripped = _re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
-    stripped = _re.sub(r"\n?```\s*$", "", stripped)
-
-    try:
-        # Parse the JSON response from Claude
-        parsed = json.loads(stripped)
-        # Validate required fields
-        result = {
-            "keywords": parsed.get("keywords", []),
-            "category_tags": parsed.get("category_tags", []),
-            "subscriber_min": parsed.get("subscriber_min"),
-            "subscriber_max": parsed.get("subscriber_max"),
-            "extra_conditions": parsed.get("extra_conditions"),
-        }
-        if not result["keywords"]:
-            return {"error": "키워드를 추출할 수 없습니다. 더 구체적으로 입력해주세요."}
-        return result
-    except json.JSONDecodeError:
-        return {"error": f"AI 응답 파싱 실패: {text[:200]}"}
-
+# ────────────────────────────────────────────
+# Main entry point
+# ────────────────────────────────────────────
 
 def main():
     input_line = sys.stdin.readline().strip()
@@ -284,14 +314,23 @@ def main():
         print(json.dumps({"error": "프롬프트가 비어있습니다"}))
         return
 
-    if not api_key:
-        # Fallback: basic Korean NLP parsing without AI
+    # Route 1: API key present → try AI, fallback on failure
+    if api_key:
+        result, error = ai_parse(prompt, api_key)
+        if result:
+            print(json.dumps(result, ensure_ascii=False))
+            return
+
+        # AI failed — fall through to fallback with reason logged
+        log(f"ai_parse failed ({error}), falling back to rule-based parser")
         result = fallback_parse(prompt)
-        result["_fallback"] = True
+        result["_ai_error"] = error
         print(json.dumps(result, ensure_ascii=False))
         return
 
-    result = parse_prompt(prompt, api_key)
+    # Route 2: No API key → fallback only
+    log("no api_key provided, using fallback parser")
+    result = fallback_parse(prompt)
     print(json.dumps(result, ensure_ascii=False))
 
 

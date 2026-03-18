@@ -49,7 +49,8 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [subscriberMax, setSubscriberMax] = useState('')
   const [newKeyword, setNewKeyword] = useState('')
   const [extraConditions, setExtraConditions] = useState<string | null>(null)
-  const [isFallback, setIsFallback] = useState(false)
+  const [parseMode, setParseMode] = useState<'ai' | 'fallback' | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // Settings
   const [targetCount, setTargetCount] = useState('30')
@@ -73,7 +74,8 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMin(result.subscriber_min ? String(result.subscriber_min) : '')
       setSubscriberMax(result.subscriber_max ? String(result.subscriber_max) : '')
       setExtraConditions(result.extra_conditions || null)
-      setIsFallback(!!result._fallback)
+      setParseMode(result.parse_mode || (result._fallback ? 'fallback' : 'ai'))
+      setAiError(result._ai_error || null)
       setParseError('')
       setStep('confirm')
     },
@@ -101,7 +103,8 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setMaxRetries('3')
       setDelayMs('2000')
       setShowOptions(false)
-      setIsFallback(false)
+      setParseMode(null)
+      setAiError(null)
       setStep('input')
       onCreated?.()
     },
@@ -237,15 +240,20 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           {/* AI 분석 결과 헤더 */}
           <div className="parsed-header">
             <h4 className="setup-section-title" style={{ margin: 0 }}>
-              {isFallback ? '검색 조건 분석 결과' : 'AI 분석 결과'}
+              {parseMode === 'fallback' ? '검색 조건 분석 결과' : 'AI 분석 결과'}
+              <span className={`parse-mode-badge ${parseMode === 'ai' ? 'parse-mode-ai' : 'parse-mode-fallback'}`}>
+                {parseMode === 'ai' ? 'AI' : '기본'}
+              </span>
             </h4>
             <button type="button" className="btn-text" onClick={handleBack}>
               다시 입력
             </button>
           </div>
-          {isFallback && (
+          {parseMode === 'fallback' && (
             <p className="parsed-fallback-notice">
-              AI 키가 설정되지 않아 기본 파서로 분석했습니다.
+              {aiError
+                ? `AI 분석 실패 (${aiError}) — 기본 파서로 분석했습니다. 키워드를 직접 수정해주세요.`
+                : 'API 키가 설정되지 않아 기본 파서로 분석했습니다.'}
             </p>
           )}
 
