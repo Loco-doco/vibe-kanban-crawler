@@ -340,8 +340,17 @@ class EmailFinder:
 
         return urls[:5]
 
+    # Domains that are YouTube/Google internal — not creator-owned
+    _INTERNAL_DOMAINS = {
+        "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+        "googlevideo.com", "ytimg.com", "ggpht.com", "gstatic.com",
+        "google.com", "googleapis.com", "accounts.google.com",
+        "googleusercontent.com", "googleadservices.com",
+        "play.google.com", "support.google.com",
+    }
+
     def _extract_youtube_external_links(self, html):
-        """Extract external links from YouTube channel page."""
+        """Extract external links from YouTube channel page (skip YouTube/Google internal URLs)."""
         links = []
 
         for match in re.finditer(r'q=https?%3A%2F%2F([^"&]+)', html):
@@ -353,7 +362,14 @@ class EmailFinder:
         ):
             links.append(match.group(1))
 
-        return list(set(links))
+        # Filter out YouTube/Google internal domains
+        filtered = []
+        for link in set(links):
+            domain = urlparse(link).netloc.lower()
+            if not any(domain.endswith(internal) for internal in self._INTERNAL_DOMAINS):
+                filtered.append(link)
+
+        return filtered
 
     def _extract_channel_id(self, channel_url, html=None):
         """Extract YouTube channel ID from URL or page HTML."""

@@ -111,10 +111,17 @@ def fallback_parse(prompt):
         "중에", "사이", "위주",
         "관련된", "관련한", "관련",
         "소규모", "중소형", "중형", "대형", "메가",
-        "인데", "이고", "이며", "하고",
         "채널인데", "채널이고", "채널인", "채널",
-        "크리에이터",
+        "크리에이터", "유튜버",
+        # Sentence-level fillers
+        "한국인", "한국",
+        "콘텐츠를 올리거나", "콘텐츠를 만드는", "콘텐츠를 하는",
+        "경험이 있는", "경험이 있거나", "경험 있는",
+        "아니면", "또는", "혹은", "이거나", "올리거나",
+        "하는", "있는", "하거나", "없는",
+        "인데", "이고", "이며", "하고",
         "좀", "한번", "정도", "쯤", "약", "대략",
+        "키워드",
     ]
     for word in filler:
         cleaned = cleaned.replace(word, " ")
@@ -123,8 +130,8 @@ def fallback_parse(prompt):
     cleaned = re.sub(r"(?<!\S)[은는이가을를에서의로도인곳데중]\s", " ", cleaned)
     cleaned = re.sub(r"(?<!\S)[은는이가을를에서의로도인곳데중]$", "", cleaned)
 
-    # Split into meaningful segments
-    segments = re.split(r"[,，\n]+", cleaned)
+    # Split into meaningful segments by commas, newlines, periods, and conjunctions
+    segments = re.split(r"[,，\n.。/]+", cleaned)
     keywords = []
     for seg in segments:
         seg = seg.strip()
@@ -132,10 +139,27 @@ def fallback_parse(prompt):
         if seg and len(seg) >= 2:
             keywords.append(seg)
 
+    # Post-process: break very long keywords (>15 chars) into noun phrases
+    final_keywords = []
+    for kw in keywords:
+        if len(kw) > 15:
+            # Try splitting by spaces and grouping into 2-3 word chunks
+            words = kw.split()
+            if len(words) >= 3:
+                # Take meaningful 2-word pairs
+                for i in range(0, len(words), 2):
+                    chunk = " ".join(words[i:i+2])
+                    if len(chunk) >= 2:
+                        final_keywords.append(chunk)
+            else:
+                final_keywords.append(kw)
+        else:
+            final_keywords.append(kw)
+
     # Deduplicate
     seen = set()
     unique_keywords = []
-    for kw in keywords:
+    for kw in final_keywords:
         if kw.lower() not in seen:
             seen.add(kw.lower())
             unique_keywords.append(kw)
