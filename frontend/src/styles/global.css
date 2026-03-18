@@ -955,6 +955,8 @@ body {
 
 .results-metric-value { display: block; font-size: 1.5rem; font-weight: 700; color: var(--gray-900); }
 .results-metric-label { display: block; font-size: 0.75rem; color: var(--gray-500); margin-top: 2px; }
+.results-metric-primary { border: 2px solid var(--primary); background: var(--primary-light, #eff6ff); }
+.results-metric-primary .results-metric-value { color: var(--primary); }
 
 /* ===== Job Status Badges ===== */
 .status-badge.queued { background: var(--gray-100); color: var(--gray-500); }

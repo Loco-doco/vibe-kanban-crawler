@@ -52,13 +52,20 @@ defmodule LeadResearcher.Crawler.Runner do
       if valid_lead?(lead_data) do
         case process_lead(lead_data, job_id) do
           {:ok, _} ->
-            :counters.add(count_ref, 1, 1)
-            count = :counters.get(count_ref, 1)
-            Jobs.update_job(job, %{total_leads_found: count})
+            email = lead_data["email"]
+            has_email = is_binary(email) and email != ""
 
-            # First lead found: running → partial_results
-            if count == 1 do
-              Jobs.update_job_status(job_id, "partial_results")
+            # Only count leads WITH email toward total_leads_found
+            # (aligns with Python crawler's qualified_count)
+            if has_email do
+              :counters.add(count_ref, 1, 1)
+              count = :counters.get(count_ref, 1)
+              Jobs.update_job(job, %{total_leads_found: count})
+
+              # First qualified lead found: running → partial_results
+              if count == 1 do
+                Jobs.update_job_status(job_id, "partial_results")
+              end
             end
 
           {:skip, _} ->

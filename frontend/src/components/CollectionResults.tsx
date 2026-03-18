@@ -32,7 +32,7 @@ export default function CollectionResults({ initialJobId }: Props) {
 
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
   const finishedJobs = jobs?.filter((j: Job) =>
-    (['completed', 'completed_low_yield', 'failed'] as string[]).includes(j.status)
+    (['completed', 'completed_low_yield', 'failed', 'cancelled'] as string[]).includes(j.status)
   ) || []
 
   const { data: leads, isLoading: leadsLoading } = useQuery({
@@ -75,10 +75,18 @@ export default function CollectionResults({ initialJobId }: Props) {
   }
 
   const selectedJob = finishedJobs.find((j: Job) => j.id === selectedJobId)
-  const emailCount = leads?.filter((l: Lead) => l.email).length || 0
-  const avgConfidence = leads?.length
-    ? leads.reduce((sum: number, l: Lead) => sum + l.confidence_score, 0) / leads.length
+  const emailLeads = leads?.filter((l: Lead) => l.email) || []
+  const manualReviewLeads = leads?.filter((l: Lead) => !l.email) || []
+  const emailCount = emailLeads.length
+  const avgConfidence = emailLeads.length
+    ? emailLeads.reduce((sum: number, l: Lead) => sum + l.confidence_score, 0) / emailLeads.length
     : 0
+
+  // Sort leads: email leads first (by confidence desc), then manual review
+  const sortedLeads = leads ? [
+    ...emailLeads.sort((a: Lead, b: Lead) => b.confidence_score - a.confidence_score),
+    ...manualReviewLeads.sort((a: Lead, b: Lead) => b.confidence_score - a.confidence_score),
+  ] : []
 
   return (
     <div className="results-wrap">
@@ -92,8 +100,8 @@ export default function CollectionResults({ initialJobId }: Props) {
           <option value="">탐색을 선택하세요</option>
           {finishedJobs.map((job: Job) => (
             <option key={job.id} value={job.id}>
-              {job.label || `탐색 #${job.id}`} — 리드 {job.total_leads_found}건
-              {job.status === 'failed' ? ' (실패)' : job.status === 'completed_low_yield' ? ' (저수율)' : ''}
+              {job.label || `탐색 #${job.id}`} — 이메일 {job.total_leads_found}건
+              {job.status === 'failed' ? ' (실패)' : job.status === 'completed_low_yield' ? ' (목표 미달)' : job.status === 'cancelled' ? ' (취소)' : ''}
             </option>
           ))}
         </select>
@@ -149,19 +157,17 @@ export default function CollectionResults({ initialJobId }: Props) {
         <>
           {/* Metrics */}
           <div className="results-metrics">
-            <div className="results-metric">
-              <span className="results-metric-value">{leads?.length || 0}</span>
-              <span className="results-metric-label">총 수집</span>
-            </div>
-            <div className="results-metric">
+            <div className="results-metric results-metric-primary">
               <span className="results-metric-value">{emailCount}</span>
               <span className="results-metric-label">이메일 확보</span>
             </div>
             <div className="results-metric">
-              <span className="results-metric-value">
-                {leads?.length ? Math.round((emailCount / leads.length) * 100) : 0}%
-              </span>
-              <span className="results-metric-label">이메일 확보율</span>
+              <span className="results-metric-value">{manualReviewLeads.length}</span>
+              <span className="results-metric-label">직접 확인 필요</span>
+            </div>
+            <div className="results-metric">
+              <span className="results-metric-value">{leads?.length || 0}</span>
+              <span className="results-metric-label">전체 채널</span>
             </div>
             <div className="results-metric">
               <span className="results-metric-value">{Math.round(avgConfidence * 100)}%</span>
@@ -196,7 +202,7 @@ export default function CollectionResults({ initialJobId }: Props) {
           {/* Table */}
           {leadsLoading ? (
             <div className="loading-state">불러오는 중...</div>
-          ) : !leads?.length ? (
+          ) : !sortedLeads.length ? (
             <div className="empty-state">
               <span className="empty-state-icon">{'\u{1F50D}'}</span>
               <h3>수집된 리드가 없습니다</h3>
@@ -218,7 +224,7 @@ export default function CollectionResults({ initialJobId }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.map((lead: Lead) => (
+                    {sortedLeads.map((lead: Lead) => (
                       <tr key={lead.id}>
                         <td className="email-cell">
                           {lead.email || <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>이메일 없음</span>}
