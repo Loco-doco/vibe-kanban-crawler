@@ -781,7 +781,10 @@ body {
 .setup-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
 
 .setup-submit { width: 100%; margin-top: 4px; }
-.setup-error { color: var(--danger); font-size: 0.8rem; margin-top: 8px; }
+.setup-error { color: var(--danger); font-size: 0.8rem; margin-top: 8px; display: block; }
+.input-error { border-color: var(--danger) !important; }
+.input-error:focus { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important; }
+.validation-errors { margin-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
 
 /* Platform selector chips */
 .platform-selector, .category-selector { display: flex; flex-wrap: wrap; gap: 8px; }

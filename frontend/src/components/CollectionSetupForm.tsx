@@ -143,7 +143,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
 
   const addKeyword = () => {
     const kw = newKeyword.trim()
-    if (kw && !keywords.includes(kw)) {
+    if (kw && !keywords.includes(kw) && keywords.length < 5) {
       setKeywords([...keywords, kw])
       setNewKeyword('')
     }
@@ -175,6 +175,19 @@ export default function CollectionSetupForm({ onCreated }: Props) {
 
   const isProcessing = parseMutation.isPending || createMutation.isPending
   const effortLabel = EFFORT_LEVELS.find((l) => l.value === searchEffort)
+
+  // Validation
+  const validationErrors: string[] = []
+  if (step === 'confirm') {
+    if (keywords.length === 0) validationErrors.push('최소 1개의 키워드가 필요합니다')
+    if (keywords.length > 5) validationErrors.push('키워드는 최대 5개까지 가능합니다')
+    if (subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax)) {
+      validationErrors.push('최소 구독자가 최대 구독자보다 클 수 없습니다')
+    }
+    if (targetCount && Number(targetCount) < 1) validationErrors.push('수집 목표는 1건 이상이어야 합니다')
+    if (!targetCount) validationErrors.push('수집 목표를 입력해주세요')
+  }
+  const hasErrors = validationErrors.length > 0
 
   return (
     <form onSubmit={handleAnalyze} className="setup-form">
@@ -242,19 +255,24 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                   <button type="button" className="chip-remove" onClick={() => removeKeyword(i)} title="삭제">&times;</button>
                 </span>
               ))}
-              <div className="chip-add-wrap">
-                <input
-                  type="text"
-                  className="chip-add-input"
-                  value={newKeyword}
-                  onChange={(e) => setNewKeyword(e.target.value)}
-                  onKeyDown={handleKeywordKeyDown}
-                  placeholder="+ 키워드 추가"
-                />
-                {newKeyword.trim() && (
-                  <button type="button" className="chip-add-btn" onClick={addKeyword}>추가</button>
-                )}
-              </div>
+              {keywords.length < 5 && (
+                <div className="chip-add-wrap">
+                  <input
+                    type="text"
+                    className="chip-add-input"
+                    value={newKeyword}
+                    onChange={(e) => setNewKeyword(e.target.value)}
+                    onKeyDown={handleKeywordKeyDown}
+                    placeholder="+ 키워드 추가"
+                  />
+                  {newKeyword.trim() && (
+                    <button type="button" className="chip-add-btn" onClick={addKeyword}>추가</button>
+                  )}
+                </div>
+              )}
+              {keywords.length >= 5 && (
+                <span className="setup-help" style={{ alignSelf: 'center' }}>최대 5개</span>
+              )}
             </div>
             {keywords.length === 0 && (
               <span className="setup-error" style={{ marginTop: 4 }}>최소 1개의 키워드가 필요합니다</span>
@@ -285,7 +303,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 최소 구독자
                 <input
                   type="number"
-                  className="setup-input"
+                  className={`setup-input${subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) ? ' input-error' : ''}`}
                   value={subscriberMin}
                   onChange={(e) => setSubscriberMin(e.target.value)}
                   placeholder="제한 없음"
@@ -297,7 +315,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 최대 구독자
                 <input
                   type="number"
-                  className="setup-input"
+                  className={`setup-input${subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) ? ' input-error' : ''}`}
                   value={subscriberMax}
                   onChange={(e) => setSubscriberMax(e.target.value)}
                   placeholder="제한 없음"
@@ -309,7 +327,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 수집 목표
                 <input
                   type="number"
-                  className="setup-input"
+                  className={`setup-input${!targetCount || Number(targetCount) < 1 ? ' input-error' : ''}`}
                   value={targetCount}
                   onChange={(e) => setTargetCount(e.target.value)}
                   placeholder="30"
@@ -318,6 +336,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 <span className="setup-help">이메일 보유 리드 기준</span>
               </label>
             </div>
+            {subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) && (
+              <span className="setup-error" style={{ marginTop: 4 }}>최소 구독자가 최대 구독자보다 클 수 없습니다</span>
+            )}
           </div>
 
           {/* 탐색 강도 */}
@@ -432,11 +453,20 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             </p>
           </div>
 
+          {/* Validation errors */}
+          {hasErrors && (
+            <div className="validation-errors">
+              {validationErrors.map((err, i) => (
+                <span key={i} className="setup-error">{err}</span>
+              ))}
+            </div>
+          )}
+
           {/* 탐색 시작 버튼 */}
           <button
             type="button"
             className="btn btn-primary setup-submit"
-            disabled={isProcessing || keywords.length === 0}
+            disabled={isProcessing || hasErrors}
             onClick={handleStartCrawl}
           >
             {createMutation.isPending ? '탐색 생성 중...' : '크리에이터 탐색 시작'}
