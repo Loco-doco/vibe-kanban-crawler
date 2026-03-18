@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getJobs, cancelJob } from '../api/jobs'
 import StatusBadge from './StatusBadge'
 import JobDetailPanel from './JobDetailPanel'
+import { formatDateTimeShort } from '../utils/datetime'
 import type { Job, JobStatus } from '../types'
 
 const ACTIVE_STATUSES: JobStatus[] = ['draft', 'queued', 'running', 'partial_results']
@@ -38,10 +39,7 @@ export default function JobMonitor({ onViewResults }: Props) {
     return `${Math.floor(sec / 60)}분 ${sec % 60}초`
   }
 
-  const formatTime = (iso: string) => {
-    const d = new Date(iso)
-    return d.toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  }
+  const formatTime = (iso: string) => formatDateTimeShort(iso)
 
   const toggleExpand = (id: number) => {
     setExpandedJobId(expandedJobId === id ? null : id)

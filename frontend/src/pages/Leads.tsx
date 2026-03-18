@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getLeads, exportCsvUrl, updateLead } from '../api/leads'
 import StatusBadge from '../components/StatusBadge'
+import { formatDate } from '../utils/datetime'
 import type { Lead } from '../types'
 import { PLATFORM_LABELS } from '../types'
 
@@ -286,7 +287,7 @@ export default function Leads() {
                     </td>
                     <td><StatusBadge status={lead.status} /></td>
                     <td style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>
-                      {new Date(lead.inserted_at).toLocaleDateString('ko-KR')}
+                      {formatDate(lead.inserted_at)}
                     </td>
                   </tr>
                 ))}

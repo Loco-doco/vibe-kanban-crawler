@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getLeads } from '../api/leads'
+import { formatDateTime } from '../utils/datetime'
 import type { Job, Lead } from '../types'
 import {
   PLATFORM_LABELS,
@@ -34,8 +35,7 @@ function formatSubscribers(count: number | null): string {
 }
 
 function formatLeadTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return formatDateTime(iso)
 }
 
 export default function JobDetailPanel({ job, onViewResults }: Props) {
