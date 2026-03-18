@@ -60,15 +60,39 @@ defmodule LeadResearcher.Jobs do
   end
 
   def cancel_job(job_id) do
-    update_job_status(job_id, "cancelled")
+    update_job_status(job_id, "cancelled", %{
+      termination_reason: "user_cancelled",
+      completed_at: DateTime.utc_now()
+    })
   end
 
   def list_pending_job_ids do
     Job
-    |> where([j], j.status == "pending")
+    |> where([j], j.status == "queued")
     |> order_by(asc: :inserted_at)
     |> select([j], j.id)
     |> Repo.all()
+  end
+
+  @doc """
+  Determines the final completion status based on termination_reason.
+
+  - target_reached → completed
+  - sources_exhausted / duplicate_heavy / insufficient_contact_coverage → completed_low_yield
+  - timeout / system_error → failed
+  - user_cancelled → cancelled
+  """
+  def determine_completion_status(job_id) do
+    job = get_job!(job_id)
+
+    case job.termination_reason do
+      "target_reached" -> "completed"
+      reason when reason in ~w(sources_exhausted duplicate_heavy insufficient_contact_coverage) -> "completed_low_yield"
+      "timeout" -> "failed"
+      "system_error" -> "failed"
+      "user_cancelled" -> "cancelled"
+      _ -> "completed"
+    end
   end
 
   defp maybe_filter_status(query, %{"status" => status}) when is_binary(status) do

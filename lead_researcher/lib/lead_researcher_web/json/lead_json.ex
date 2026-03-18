@@ -22,6 +22,8 @@ defmodule LeadResearcherWeb.LeadJSON do
       source_type: lead.source_type,
       source_url: lead.source_url,
       discovery_keyword: lead.discovery_keyword,
+      review_status: lead.review_status,
+      master_sync_status: lead.master_sync_status,
       job_id: lead.job_id,
       inserted_at: lead.inserted_at
     }

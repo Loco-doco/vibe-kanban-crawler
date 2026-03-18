@@ -3,8 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getJobs, cancelJob } from '../api/jobs'
 import { getLeads } from '../api/leads'
 import StatusBadge from './StatusBadge'
-import type { Job, Lead } from '../types'
+import type { Job, JobStatus, Lead } from '../types'
 import { PLATFORM_LABELS, TERMINATION_LABELS } from '../types'
+
+const ACTIVE_STATUSES: JobStatus[] = ['draft', 'queued', 'running', 'partial_results']
+const DONE_STATUSES: JobStatus[] = ['completed', 'completed_low_yield', 'failed', 'cancelled']
 
 interface Props {
   onViewResults?: (jobId: number) => void
@@ -32,8 +35,8 @@ export default function JobMonitor({ onViewResults }: Props) {
     queryClient.invalidateQueries({ queryKey: ['jobs'] })
   }
 
-  const activeJobs = jobs?.filter((j) => j.status === 'running' || j.status === 'pending') || []
-  const doneJobs = jobs?.filter((j) => j.status === 'completed' || j.status === 'failed' || j.status === 'cancelled').slice(0, 8) || []
+  const activeJobs = jobs?.filter((j) => (ACTIVE_STATUSES as string[]).includes(j.status)) || []
+  const doneJobs = jobs?.filter((j) => (DONE_STATUSES as string[]).includes(j.status)).slice(0, 8) || []
 
   const formatDuration = (job: Job) => {
     if (!job.started_at) return '-'
@@ -52,6 +55,11 @@ export default function JobMonitor({ onViewResults }: Props) {
   const toggleExpand = (id: number) => {
     setExpandedJobId(expandedJobId === id ? null : id)
   }
+
+  const canCancel = (status: string) => status === 'queued' || status === 'running'
+  const canViewResults = (job: Job) =>
+    (['completed', 'completed_low_yield', 'failed'] as string[]).includes(job.status) &&
+    job.total_leads_found > 0
 
   if (isLoading) {
     return <div className="loading-state">탐색 목록을 불러오는 중...</div>
@@ -120,7 +128,7 @@ export default function JobMonitor({ onViewResults }: Props) {
 
       {/* Actions */}
       <div className="campaign-actions">
-        {(job.status === 'pending' || job.status === 'running') && (
+        {canCancel(job.status) && (
           <button
             className="btn-small btn-cancel"
             onClick={(e) => { e.stopPropagation(); handleCancel(job.id) }}
@@ -128,7 +136,7 @@ export default function JobMonitor({ onViewResults }: Props) {
             중단
           </button>
         )}
-        {(job.status === 'completed' || job.status === 'failed') && job.total_leads_found > 0 && onViewResults && (
+        {canViewResults(job) && onViewResults && (
           <button
             className="btn-small btn-view-results"
             onClick={(e) => { e.stopPropagation(); onViewResults(job.id) }}

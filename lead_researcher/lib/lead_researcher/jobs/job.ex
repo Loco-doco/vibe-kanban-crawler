@@ -4,7 +4,7 @@ defmodule LeadResearcher.Jobs.Job do
 
   schema "jobs" do
     field :targets, :string
-    field :status, :string, default: "pending"
+    field :status, :string, default: "queued"
     field :max_retries, :integer, default: 3
     field :delay_ms, :integer, default: 2000
     field :max_depth, :integer, default: 3
@@ -40,7 +40,7 @@ defmodule LeadResearcher.Jobs.Job do
       :termination_reason, :crawl_stats
     ])
     |> validate_required([:targets])
-    |> validate_inclusion(:status, ~w(pending running completed failed cancelled))
+    |> validate_inclusion(:status, ~w(draft queued running partial_results completed completed_low_yield failed cancelled))
     |> validate_inclusion(:mode, ~w(url discovery))
     |> validate_number(:max_retries, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
     |> validate_number(:delay_ms, greater_than_or_equal_to: 0)

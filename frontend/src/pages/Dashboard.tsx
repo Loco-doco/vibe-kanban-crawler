@@ -16,7 +16,7 @@ export default function Dashboard() {
   })
 
   const runningJobs = jobs?.filter((j: Job) => j.status === 'running').length || 0
-  const completedJobs = jobs?.filter((j: Job) => j.status === 'completed').length || 0
+  const completedJobs = jobs?.filter((j: Job) => j.status === 'completed' || j.status === 'completed_low_yield').length || 0
   const totalLeadsFound = jobs?.reduce((sum: number, j: Job) => sum + j.total_leads_found, 0) || 0
 
   const confidenceClass = (score: number) => {
@@ -144,7 +144,7 @@ export default function Dashboard() {
                 {jobs.slice(0, 5).map((job: Job) => (
                   <div className="job-status-item" key={job.id}>
                     <div className="job-status-info">
-                      <span className={`status-dot ${job.status === 'running' ? 'running' : job.status === 'completed' ? 'completed' : 'pending'}`}></span>
+                      <span className={`status-dot ${job.status === 'running' ? 'running' : ['completed', 'completed_low_yield'].includes(job.status) ? 'completed' : 'queued'}`}></span>
                       <span>{job.label || `탐색 #${job.id}`} ({job.mode === 'discovery' && job.keywords?.length ? `${job.keywords.length}개 키워드` : `${job.targets.length}개 대상`})</span>
                     </div>
                     {job.status === 'running' && job.progress && (

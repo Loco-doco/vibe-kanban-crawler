@@ -13,7 +13,7 @@ export default function Collection() {
   const [resultJobId, setResultJobId] = useState<number | null>(null)
 
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs, refetchInterval: 5000 })
-  const activeCount = jobs?.filter((j: Job) => j.status === 'running' || j.status === 'pending').length || 0
+  const activeCount = jobs?.filter((j: Job) => ['draft', 'queued', 'running', 'partial_results'].includes(j.status)).length || 0
 
   const handleViewResults = (jobId: number) => {
     setResultJobId(jobId)

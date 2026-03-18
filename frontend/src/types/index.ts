@@ -1,8 +1,13 @@
+export type JobStatus = 'draft' | 'queued' | 'running' | 'partial_results' | 'completed' | 'completed_low_yield' | 'failed' | 'cancelled'
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'held'
+export type MasterSyncStatus = 'not_synced' | 'ready' | 'conflict' | 'synced'
+
 export interface Job {
   id: number
   label: string | null
   targets: string[]
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: JobStatus
   mode: 'url' | 'discovery'
   platform: string | null
   category_tags: string[]
@@ -56,6 +61,8 @@ export interface Lead {
   source_type: string | null
   source_url: string | null
   discovery_keyword: string | null
+  review_status: ReviewStatus
+  master_sync_status: MasterSyncStatus
   job_id: number
   inserted_at: string
 }
@@ -115,9 +122,12 @@ export const PLATFORM_LABELS: Record<string, string> = {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-  pending: '대기 중',
+  draft: '초안',
+  queued: '대기 중',
   running: '수집 중',
+  partial_results: '부분 결과',
   completed: '완료',
+  completed_low_yield: '저수율 완료',
   failed: '오류 발생',
   cancelled: '취소됨',
 }
@@ -138,6 +148,20 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
   search_result: '검색결과',
   external_site: '외부사이트',
   contact_page: '연락처',
+}
+
+export const REVIEW_STATUS_LABELS: Record<string, string> = {
+  pending: '검토 대기',
+  approved: '승인',
+  rejected: '제외',
+  held: '보류',
+}
+
+export const MASTER_SYNC_LABELS: Record<string, string> = {
+  not_synced: '미반영',
+  ready: '반영 가능',
+  conflict: '충돌',
+  synced: '반영 완료',
 }
 
 export const SUGGESTED_CATEGORIES = [

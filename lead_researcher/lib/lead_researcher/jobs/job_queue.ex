@@ -43,7 +43,7 @@ defmodule LeadResearcher.Jobs.JobQueue do
       %{pid: pid} -> Process.exit(pid, :shutdown)
     end
 
-    Jobs.update_job_status(job_id, "cancelled")
+    # DB update is handled by the controller calling Jobs.cancel_job
     state = %{state | running: Map.delete(state.running, job_id)}
     {:noreply, drain_queue(state)}
   end
@@ -62,8 +62,9 @@ defmodule LeadResearcher.Jobs.JobQueue do
           Logger.error("Job #{job_id} failed: #{inspect(reason)}")
 
         _ ->
-          Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
-          Logger.info("Job #{job_id} completed successfully")
+          final_status = Jobs.determine_completion_status(job_id)
+          Jobs.update_job_status(job_id, final_status, %{completed_at: DateTime.utc_now()})
+          Logger.info("Job #{job_id} finished with status: #{final_status}")
       end
     end
 

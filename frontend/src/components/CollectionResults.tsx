@@ -31,7 +31,9 @@ export default function CollectionResults({ initialJobId }: Props) {
   }, [selectedJobId])
 
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
-  const finishedJobs = jobs?.filter((j: Job) => j.status === 'completed' || j.status === 'failed') || []
+  const finishedJobs = jobs?.filter((j: Job) =>
+    (['completed', 'completed_low_yield', 'failed'] as string[]).includes(j.status)
+  ) || []
 
   const { data: leads, isLoading: leadsLoading } = useQuery({
     queryKey: ['leads', { job_id: selectedJobId }],
@@ -91,7 +93,7 @@ export default function CollectionResults({ initialJobId }: Props) {
           {finishedJobs.map((job: Job) => (
             <option key={job.id} value={job.id}>
               {job.label || `탐색 #${job.id}`} — 리드 {job.total_leads_found}건
-              {job.status === 'failed' ? ' (실패)' : ''}
+              {job.status === 'failed' ? ' (실패)' : job.status === 'completed_low_yield' ? ' (저수율)' : ''}
             </option>
           ))}
         </select>
