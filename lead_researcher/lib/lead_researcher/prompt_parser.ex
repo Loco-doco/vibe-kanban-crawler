@@ -9,7 +9,7 @@ defmodule LeadResearcher.PromptParser do
   @timeout 30_000
 
   def parse(prompt) when is_binary(prompt) and byte_size(prompt) > 0 do
-    api_key = System.get_env("ANTHROPIC_API_KEY") || ""
+    api_key = resolve_api_key()
     config = Jason.encode!(%{"prompt" => prompt, "api_key" => api_key})
     python = System.find_executable("python3") || "python3"
     script = Path.join(@crawler_dir, "prompt_parser.py")
@@ -41,6 +41,39 @@ defmodule LeadResearcher.PromptParser do
       @timeout ->
         Port.close(port)
         {:error, "파싱 시간 초과"}
+    end
+  end
+
+  defp resolve_api_key do
+    # 1. Environment variable (highest priority)
+    case System.get_env("ANTHROPIC_API_KEY") do
+      key when is_binary(key) and key != "" ->
+        key
+
+      _ ->
+        # 2. macOS Keychain: Claude Code OAuth token (local development)
+        read_keychain_token()
+    end
+  end
+
+  defp read_keychain_token do
+    case System.cmd(
+           "security",
+           ["find-generic-password", "-s", "Claude Code-credentials", "-w"],
+           stderr_to_stdout: true
+         ) do
+      {json, 0} ->
+        case Jason.decode(String.trim(json)) do
+          {:ok, %{"claudeAiOauth" => %{"accessToken" => token}}}
+          when is_binary(token) and token != "" ->
+            token
+
+          _ ->
+            ""
+        end
+
+      _ ->
+        ""
     end
   end
 

@@ -227,9 +227,14 @@ def parse_prompt(prompt, api_key):
     data = response.json()
     text = data.get("content", [{}])[0].get("text", "")
 
+    # Strip markdown code blocks if present (```json ... ```)
+    import re as _re
+    stripped = _re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
+    stripped = _re.sub(r"\n?```\s*$", "", stripped)
+
     try:
         # Parse the JSON response from Claude
-        parsed = json.loads(text)
+        parsed = json.loads(stripped)
         # Validate required fields
         result = {
             "keywords": parsed.get("keywords", []),
