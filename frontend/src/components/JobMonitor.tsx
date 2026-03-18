@@ -50,7 +50,7 @@ export default function JobMonitor({ onViewResults }: Props) {
     setExpandedJobId(expandedJobId === id ? null : id)
   }
 
-  const canCancel = (status: string) => status === 'queued' || status === 'running'
+  const canCancel = (status: string) => status === 'queued' || status === 'running' || status === 'partial_results'
 
   if (isLoading) {
     return <div className="loading-state">탐색 목록을 불러오는 중...</div>

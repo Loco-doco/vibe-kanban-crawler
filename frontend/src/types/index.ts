@@ -123,13 +123,13 @@ export const PLATFORM_LABELS: Record<string, string> = {
 
 export const STATUS_LABELS: Record<string, string> = {
   draft: '초안',
-  queued: '대기 중',
-  running: '수집 중',
-  partial_results: '부분 결과',
-  completed: '완료',
-  completed_low_yield: '저수율 완료',
-  failed: '오류 발생',
-  cancelled: '취소됨',
+  queued: '실행 대기 중',
+  running: '탐색 중',
+  partial_results: '일부 결과 확보됨',
+  completed: '목표 달성 완료',
+  completed_low_yield: '탐색 종료(목표 미달)',
+  failed: '실행 실패',
+  cancelled: '사용자 취소',
 }
 
 export const TERMINATION_LABELS: Record<string, string> = {
