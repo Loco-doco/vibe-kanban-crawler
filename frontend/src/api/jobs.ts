@@ -26,6 +26,7 @@ export interface ParsedPrompt {
   category_tags: string[]
   subscriber_min: number | null
   subscriber_max: number | null
+  _fallback?: boolean
 }
 
 export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {

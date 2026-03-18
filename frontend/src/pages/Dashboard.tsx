@@ -10,7 +10,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   const { data: jobs, isLoading: jobsLoading } = useQuery({ queryKey: ['jobs'], queryFn: getJobs })
-  const { data: leads, isLoading: leadsLoading } = useQuery({
+  const { data: leads } = useQuery({
     queryKey: ['leads-recent'],
     queryFn: () => getLeads({ limit: 5, sort: 'inserted_at', order: 'desc' }),
   })

@@ -147,7 +147,14 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       {/* AI 분석 결과 */}
       {step === 'confirm' && parsedResult && (
         <div className="setup-section parsed-result">
-          <h4 className="setup-section-title">AI 분석 결과</h4>
+          <h4 className="setup-section-title">
+            {parsedResult._fallback ? '검색 조건 분석 결과' : 'AI 분석 결과'}
+          </h4>
+          {parsedResult._fallback && (
+            <p className="setup-hint parsed-fallback-notice">
+              AI 키가 설정되지 않아 기본 파서로 분석했습니다. 더 정확한 분석을 원하면 ANTHROPIC_API_KEY를 설정하세요.
+            </p>
+          )}
           <div className="parsed-tags">
             <div className="parsed-row">
               <span className="parsed-label">검색 키워드</span>
