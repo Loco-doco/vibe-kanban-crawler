@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getJobs, cancelJob } from '../api/jobs'
-import { getLeads } from '../api/leads'
 import StatusBadge from './StatusBadge'
-import type { Job, JobStatus, Lead } from '../types'
-import { PLATFORM_LABELS, TERMINATION_LABELS } from '../types'
+import JobDetailPanel from './JobDetailPanel'
+import type { Job, JobStatus } from '../types'
+import { TERMINATION_LABELS } from '../types'
 
 const ACTIVE_STATUSES: JobStatus[] = ['draft', 'queued', 'running', 'partial_results']
 const DONE_STATUSES: JobStatus[] = ['completed', 'completed_low_yield', 'failed', 'cancelled']
@@ -17,17 +17,11 @@ export default function JobMonitor({ onViewResults }: Props) {
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null)
   const queryClient = useQueryClient()
 
+  // 상위 polling: job 목록만 갱신 (5초). Detail 내부 fetch와 역할 분리.
   const { data: jobs, isLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: getJobs,
     refetchInterval: 5000,
-  })
-
-  const { data: previewLeads } = useQuery({
-    queryKey: ['leads', { job_id: expandedJobId, limit: 5 }],
-    queryFn: () => getLeads({ job_id: expandedJobId!, limit: 5, sort: 'inserted_at', order: 'desc' }),
-    enabled: expandedJobId !== null,
-    refetchInterval: expandedJobId !== null ? 5000 : false,
   })
 
   const handleCancel = async (id: number) => {
@@ -57,9 +51,6 @@ export default function JobMonitor({ onViewResults }: Props) {
   }
 
   const canCancel = (status: string) => status === 'queued' || status === 'running'
-  const canViewResults = (job: Job) =>
-    (['completed', 'completed_low_yield', 'failed'] as string[]).includes(job.status) &&
-    job.total_leads_found > 0
 
   if (isLoading) {
     return <div className="loading-state">탐색 목록을 불러오는 중...</div>
@@ -67,25 +58,30 @@ export default function JobMonitor({ onViewResults }: Props) {
 
   const renderCard = (job: Job, isDone: boolean) => (
     <div key={job.id} className={`campaign-card ${job.status}${isDone ? ' done' : ''}`}>
+      {/* Header: 탐색명 + StatusBadge + Chevron */}
       <div className="campaign-header" onClick={() => toggleExpand(job.id)} style={{ cursor: 'pointer' }}>
         <div className="campaign-title">
           {!isDone && <span className={`status-dot ${job.status}`} />}
           <span>{job.label || `탐색 #${job.id}`}</span>
         </div>
-        <StatusBadge status={job.status} />
+        <div className="campaign-header-right">
+          <StatusBadge status={job.status} />
+          <span className={`expand-chevron${expandedJobId === job.id ? ' open' : ''}`}>▾</span>
+        </div>
       </div>
 
+      {/* Meta: 수집 현황 + 시각 */}
       <div className="campaign-meta">
-        {job.mode === 'discovery' && <span className="campaign-tag" style={{ background: 'var(--primary-50)', color: 'var(--primary-600)' }}>키워드 탐색</span>}
-        {job.platform && <span>{job.platform.split(',').map((p) => PLATFORM_LABELS[p] || p).join(', ')}</span>}
-        {job.mode === 'discovery' && job.keywords?.length
-          ? <span>{job.keywords.length}개 키워드</span>
-          : <span>{job.targets.length}개 대상</span>}
-        <span>리드 {job.total_leads_found}건</span>
-        {isDone ? <span>{formatTime(job.inserted_at)}</span> : <span>{formatDuration(job)}</span>}
+        <span className="campaign-meta-primary">
+          {job.progress?.collected ?? job.total_leads_found} / {job.target_count ?? '-'}건
+        </span>
+        {!isDone && <span>{formatDuration(job)}</span>}
+        <span>생성 {formatTime(job.inserted_at)}</span>
+        <span>갱신 {formatTime(job.updated_at)}</span>
       </div>
 
-      {job.status === 'running' && job.progress && (
+      {/* Progress bar: running + partial_results */}
+      {(job.status === 'running' || job.status === 'partial_results') && job.progress && (
         <div className="campaign-progress">
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${job.progress.percentage}%` }} />
@@ -97,84 +93,45 @@ export default function JobMonitor({ onViewResults }: Props) {
         </div>
       )}
 
-      {job.category_tags?.length > 0 && (
-        <div className="campaign-tags">
-          {job.category_tags.map((tag) => (
-            <span key={tag} className="campaign-tag">{tag}</span>
-          ))}
+      {/* partial_results 강조 */}
+      {job.status === 'partial_results' && (
+        <div className="partial-results-indicator">
+          중간 결과를 확인할 수 있습니다
         </div>
       )}
 
+      {/* 종료 사유 요약 (카드 레벨: 짧은 라벨) */}
+      {job.termination_reason && isDone && (
+        <div className="campaign-termination">
+          <span className="termination-label">종료:</span>
+          <span className={`termination-badge ${job.termination_reason}`}>
+            {TERMINATION_LABELS[job.termination_reason] || job.termination_reason}
+          </span>
+        </div>
+      )}
+
+      {/* 실패 에러 메시지 */}
       {job.status === 'failed' && job.error_message && (
         <div className="campaign-error">
           {job.error_message}
         </div>
       )}
 
-      {job.termination_reason && isDone && (
-        <div className="campaign-termination">
-          <span className="termination-label">종료 사유:</span>
-          <span className={`termination-badge ${job.termination_reason}`}>
-            {TERMINATION_LABELS[job.termination_reason] || job.termination_reason}
-          </span>
-          {job.crawl_stats && (
-            <span className="termination-stats">
-              (키워드 {job.crawl_stats.keywords_tried}/{job.crawl_stats.keywords_total}개 탐색,
-              채널 {job.crawl_stats.channels_discovered}개 발견)
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="campaign-actions">
-        {canCancel(job.status) && (
+      {/* Actions: Cancel (카드 레벨에 유지) */}
+      {canCancel(job.status) && (
+        <div className="campaign-actions">
           <button
             className="btn-small btn-cancel"
             onClick={(e) => { e.stopPropagation(); handleCancel(job.id) }}
           >
             중단
           </button>
-        )}
-        {canViewResults(job) && onViewResults && (
-          <button
-            className="btn-small btn-view-results"
-            onClick={(e) => { e.stopPropagation(); onViewResults(job.id) }}
-          >
-            결과 보기 {'\u2192'}
-          </button>
-        )}
-      </div>
-
-      {/* Expanded: lead preview */}
-      {expandedJobId === job.id && (
-        <div className="campaign-preview">
-          <div className="campaign-preview-title">
-            수집된 리드 미리보기 ({job.total_leads_found}건 중 최근 5건)
-          </div>
-          {!previewLeads?.length ? (
-            <div className="campaign-preview-empty">아직 수집된 리드가 없습니다</div>
-          ) : (
-            <table className="mini-table">
-              <thead>
-                <tr>
-                  <th>이메일</th>
-                  <th>채널명</th>
-                  <th>플랫폼</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewLeads.map((lead: Lead) => (
-                  <tr key={lead.id}>
-                    <td>{lead.email || '(확인 필요)'}</td>
-                    <td>{lead.channel_name || '-'}</td>
-                    <td>{PLATFORM_LABELS[lead.platform] || lead.platform}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
+      )}
+
+      {/* Expanded: Job Detail Panel */}
+      {expandedJobId === job.id && (
+        <JobDetailPanel job={job} onViewResults={onViewResults} />
       )}
     </div>
   )
@@ -199,9 +156,8 @@ export default function JobMonitor({ onViewResults }: Props) {
 
       {activeJobs.length === 0 && doneJobs.length === 0 && (
         <div className="empty-state">
-          <span className="empty-state-icon">{'\u{1F4E6}'}</span>
           <h3>탐색 내역이 없습니다</h3>
-          <p>&ldquo;새 탐색 만들기&rdquo; 탭에서 시작하세요</p>
+          <p>"새 탐색 만들기" 탭에서 시작하세요</p>
         </div>
       )}
     </div>

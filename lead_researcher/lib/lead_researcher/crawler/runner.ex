@@ -56,6 +56,11 @@ defmodule LeadResearcher.Crawler.Runner do
             count = :counters.get(count_ref, 1)
             Jobs.update_job(job, %{total_leads_found: count})
 
+            # First lead found: running → partial_results
+            if count == 1 do
+              Jobs.update_job_status(job_id, "partial_results")
+            end
+
           {:skip, _} ->
             :ok
 

@@ -164,6 +164,16 @@ export const MASTER_SYNC_LABELS: Record<string, string> = {
   synced: '반영 완료',
 }
 
+export const TERMINATION_SENTENCES: Record<string, string> = {
+  target_reached: '목표 수량 달성 후 탐색이 종료되었습니다.',
+  sources_exhausted: '더 이상 탐색 가능한 소스를 찾지 못해 종료되었습니다.',
+  duplicate_heavy: '중복 비율이 높아 유효 리드 확보 효율이 낮아 종료되었습니다.',
+  insufficient_contact_coverage: '이메일/연락처 보유 리드가 부족해 목표 수량에 도달하지 못했습니다.',
+  timeout: '제한 시간 내 탐색이 완료되지 못했습니다.',
+  system_error: '시스템 오류로 탐색이 중단되었습니다.',
+  user_cancelled: '사용자가 탐색을 중단했습니다.',
+}
+
 export const SUGGESTED_CATEGORIES = [
   '주식', '부업', '재테크', 'AI', '자기계발', '건강',
   '요리', '여행', '뷰티', '패션', '육아', '교육',
