@@ -1307,6 +1307,26 @@ body {
   line-height: 1.5;
 }
 
+/* ===== Extra Conditions Box ===== */
+.extra-conditions-box {
+  background: var(--warning-50, #fffbeb);
+  border: 1px solid var(--warning-200, #fde68a);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.extra-conditions-text {
+  margin: 0 0 6px 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-700);
+}
+.extra-conditions-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  line-height: 1.4;
+}
+
 /* ===== Input with Unit ===== */
 .input-with-unit {
   display: flex;
@@ -1490,6 +1510,16 @@ body {
   min-width: 60px;
   flex-shrink: 0;
   padding-top: 3px;
+}
+
+.job-detail-extra-conditions {
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  background: var(--warning-50, #fffbeb);
+  border: 1px solid var(--warning-200, #fde68a);
+  border-radius: 6px;
+  padding: 6px 10px;
+  line-height: 1.4;
 }
 
 .job-detail-keywords {

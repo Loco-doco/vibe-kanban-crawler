@@ -48,6 +48,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [subscriberMin, setSubscriberMin] = useState('')
   const [subscriberMax, setSubscriberMax] = useState('')
   const [newKeyword, setNewKeyword] = useState('')
+  const [extraConditions, setExtraConditions] = useState<string | null>(null)
   const [isFallback, setIsFallback] = useState(false)
 
   // Settings
@@ -71,6 +72,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setCategoryTags(result.category_tags)
       setSubscriberMin(result.subscriber_min ? String(result.subscriber_min) : '')
       setSubscriberMax(result.subscriber_max ? String(result.subscriber_max) : '')
+      setExtraConditions(result.extra_conditions || null)
       setIsFallback(!!result._fallback)
       setParseError('')
       setStep('confirm')
@@ -92,6 +94,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMin('')
       setSubscriberMax('')
       setNewKeyword('')
+      setExtraConditions(null)
       setTargetCount('30')
       setSearchEffort(2)
       setLabel('')
@@ -125,6 +128,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         target_count: targetCount ? Number(targetCount) : 30,
         subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
         subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
+        extra_conditions: extraConditions || undefined,
         max_retries: Number(maxRetries) || 3,
         delay_ms: Number(delayMs) || 2000,
         max_depth: searchEffort,
@@ -296,6 +300,19 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             </div>
           </div>
 
+          {/* AI가 추출한 비즈니스 조건 (검색 키워드에 반영 불가능한 조건) */}
+          {extraConditions && (
+            <div className="setup-section">
+              <span className="setup-label-inline">리뷰 참고 조건</span>
+              <div className="extra-conditions-box">
+                <p className="extra-conditions-text">{extraConditions}</p>
+                <span className="extra-conditions-hint">
+                  이 조건은 검색 키워드에 직접 반영되지 않습니다. 수집 후 리드를 리뷰할 때 참고 기준으로 활용됩니다.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* 편집 가능: 구독자 범위 + 수집 목표 */}
           <div className="setup-section">
             <div className="setup-row-3">
@@ -440,6 +457,12 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 <span className="crawl-preview-label">탐색 방식</span>
                 <span className="crawl-preview-value">{effortLabel?.label} ({effortLabel?.estimate})</span>
               </div>
+              {extraConditions && (
+                <div className="crawl-preview-row">
+                  <span className="crawl-preview-label">리뷰 참고 조건</span>
+                  <span className="crawl-preview-value">{extraConditions}</span>
+                </div>
+              )}
               {label && (
                 <div className="crawl-preview-row">
                   <span className="crawl-preview-label">탐색 이름</span>

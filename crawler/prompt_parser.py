@@ -10,26 +10,40 @@ import sys
 import json
 import requests
 
-SYSTEM_PROMPT = """당신은 YouTube 크리에이터 검색 쿼리 파서입니다.
-사용자가 자연어로 어떤 크리에이터를 찾고 싶은지 설명하면, 그것을 YouTube 검색에 적합한 구조화된 검색 파라미터로 변환합니다.
+SYSTEM_PROMPT = """당신은 YouTube 크리에이터 탐색 전문가입니다.
+사용자가 자연어로 찾고 싶은 크리에이터를 설명하면, YouTube에서 실제로 그런 크리에이터를 발견할 수 있는 **검색 전략**을 설계합니다.
+
+핵심 원칙:
+- 사용자의 비즈니스 의도를 파악하고, 그 의도에 맞는 크리에이터가 YouTube에서 어떤 콘텐츠를 올리는지 역추론하세요.
+- "실물 상품을 파는 크리에이터"를 찾으려면 → "유튜버 굿즈", "크리에이터 자체 브랜드", "유튜버 쇼핑몰 운영" 같은 키워드가 유효합니다.
+- "온라인 강의를 하는 크리에이터"를 찾으려면 → "유튜버 클래스", "강의 유튜버", "온라인 코칭" 등이 유효합니다.
+- 사용자가 말한 문장을 그대로 검색어로 쓰면 안 됩니다. YouTube 검색에서 채널이 실제로 노출될 수 있는 검색어를 만들어야 합니다.
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요:
 {
-  "keywords": ["검색 키워드1", "검색 키워드2"],
-  "category_tags": ["카테고리1", "카테고리2"],
+  "keywords": ["YouTube 검색 키워드1", "검색 키워드2", ...],
+  "category_tags": ["카테고리1"],
   "subscriber_min": null,
-  "subscriber_max": null
+  "subscriber_max": null,
+  "extra_conditions": "검색으로는 필터링 불가능한 비즈니스 조건 요약"
 }
 
 규칙:
-1. keywords: YouTube 검색에 직접 사용할 키워드 배열. 최소 1개, 최대 5개. 한국어 검색에 최적화.
-   - 예: "뷰티 유튜버", "스킨케어 리뷰", "화장품 추천 유튜버" 등
-   - 사용자의 의도를 파악해서 실제 YouTube에서 채널을 찾을 수 있는 검색어로 변환
+1. keywords (최소 1개, 최대 5개):
+   - YouTube 검색에서 **채널**이 발견될 수 있는 검색어. 한국어 최적화.
+   - 사용자의 의도를 분석하여, 해당 프로필의 크리에이터가 올릴 법한 콘텐츠 주제/니치를 키워드로 변환.
+   - 다양한 검색 각도를 커버하세요 (콘텐츠 주제 + 크리에이터 유형 + 활동 형태).
+   - 예시:
+     - "스킨케어 제품도 파는 뷰티 유튜버" → ["뷰티 유튜버 자체 브랜드", "스킨케어 추천 유튜버", "화장품 리뷰 크리에이터", "뷰티 유튜버 쇼핑몰"]
+     - "부업이나 재테크 알려주는 소규모 채널" → ["부업 유튜버", "재테크 초보 강의", "투잡 브이로그", "월급 외 수입"]
 2. category_tags: 관련 카테고리 태그 배열. 없으면 빈 배열.
-3. subscriber_min: 최소 구독자 수 (정수). 언급 없으면 null.
-   - "소규모" = 1000, "중소형" = 10000, "중형" = 50000, "대형" = 100000, "메가" = 1000000
-   - "만" = 10000, "십만" = 100000, "백만" = 1000000
-4. subscriber_max: 최대 구독자 수 (정수). 언급 없으면 null.
+3. subscriber_min / subscriber_max: 구독자 수 범위 (정수). 언급 없으면 null.
+   - "소규모" = 1000, "중소형" = 10000, "중형" = 50000, "대형" = 100000
+   - "만" = 10000, "십만" = 100000
+4. extra_conditions: 검색 키워드만으로는 필터링할 수 없는 비즈니스 조건을 한 문장으로 요약.
+   - 예: "실물 결합 상품을 판매하는 크리에이터", "기업 협업 경험이 있는 크리에이터"
+   - 이 조건은 크롤링 후 사람이 리뷰할 때 참고 기준으로 사용됩니다.
+   - 특별한 비즈니스 조건이 없으면 null.
 """
 
 
@@ -200,6 +214,7 @@ def fallback_parse(prompt):
         "category_tags": category_tags,
         "subscriber_min": subscriber_min,
         "subscriber_max": subscriber_max,
+        "extra_conditions": None,
     }
 
 
@@ -241,6 +256,7 @@ def parse_prompt(prompt, api_key):
             "category_tags": parsed.get("category_tags", []),
             "subscriber_min": parsed.get("subscriber_min"),
             "subscriber_max": parsed.get("subscriber_max"),
+            "extra_conditions": parsed.get("extra_conditions"),
         }
         if not result["keywords"]:
             return {"error": "키워드를 추출할 수 없습니다. 더 구체적으로 입력해주세요."}

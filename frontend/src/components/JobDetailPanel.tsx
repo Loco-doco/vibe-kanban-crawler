@@ -115,6 +115,13 @@ export default function JobDetailPanel({ job, onViewResults }: Props) {
           </div>
         )}
 
+        {job.extra_conditions && (
+          <div className="job-detail-row">
+            <span className="job-detail-row-label">리뷰 참고 조건</span>
+            <span className="job-detail-extra-conditions">{job.extra_conditions}</span>
+          </div>
+        )}
+
         <div className="job-detail-conditions">
           {(job.subscriber_min || job.subscriber_max) && (
             <div className="job-detail-condition">
