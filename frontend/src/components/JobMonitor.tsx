@@ -4,7 +4,7 @@ import { getJobs, cancelJob } from '../api/jobs'
 import { getLeads } from '../api/leads'
 import StatusBadge from './StatusBadge'
 import type { Job, Lead } from '../types'
-import { PLATFORM_LABELS } from '../types'
+import { PLATFORM_LABELS, TERMINATION_LABELS } from '../types'
 
 interface Props {
   onViewResults?: (jobId: number) => void
@@ -100,6 +100,21 @@ export default function JobMonitor({ onViewResults }: Props) {
       {job.status === 'failed' && job.error_message && (
         <div className="campaign-error">
           {job.error_message}
+        </div>
+      )}
+
+      {job.termination_reason && isDone && (
+        <div className="campaign-termination">
+          <span className="termination-label">종료 사유:</span>
+          <span className={`termination-badge ${job.termination_reason}`}>
+            {TERMINATION_LABELS[job.termination_reason] || job.termination_reason}
+          </span>
+          {job.crawl_stats && (
+            <span className="termination-stats">
+              (키워드 {job.crawl_stats.keywords_tried}/{job.crawl_stats.keywords_total}개 탐색,
+              채널 {job.crawl_stats.channels_discovered}개 발견)
+            </span>
+          )}
         </div>
       )}
 

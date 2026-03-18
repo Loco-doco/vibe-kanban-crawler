@@ -6,7 +6,7 @@ import { getLeads } from '../api/leads'
 import { addToMasterList } from '../api/masterList'
 import StatusBadge from './StatusBadge'
 import type { Job, Lead, AddToMasterListResult } from '../types'
-import { PLATFORM_LABELS } from '../types'
+import { PLATFORM_LABELS, TERMINATION_LABELS, SOURCE_TYPE_LABELS } from '../types'
 
 interface Props {
   initialJobId?: number | null
@@ -72,6 +72,7 @@ export default function CollectionResults({ initialJobId }: Props) {
     return 'low'
   }
 
+  const selectedJob = finishedJobs.find((j: Job) => j.id === selectedJobId)
   const emailCount = leads?.filter((l: Lead) => l.email).length || 0
   const avgConfidence = leads?.length
     ? leads.reduce((sum: number, l: Lead) => sum + l.confidence_score, 0) / leads.length
@@ -166,6 +167,30 @@ export default function CollectionResults({ initialJobId }: Props) {
             </div>
           </div>
 
+          {/* Termination reason */}
+          {selectedJob?.termination_reason && (
+            <div className="termination-info" style={{
+              padding: '10px 14px',
+              marginBottom: '16px',
+              borderRadius: '8px',
+              background: selectedJob.termination_reason === 'target_reached' ? 'var(--green-50, #f0fdf4)' : 'var(--yellow-50, #fffbeb)',
+              border: `1px solid ${selectedJob.termination_reason === 'target_reached' ? 'var(--green-200, #bbf7d0)' : 'var(--yellow-200, #fde68a)'}`,
+              fontSize: '13px',
+              color: 'var(--gray-700)',
+            }}>
+              <strong>종료 사유:</strong>{' '}
+              {TERMINATION_LABELS[selectedJob.termination_reason] || selectedJob.termination_reason}
+              {selectedJob.crawl_stats && (
+                <span style={{ marginLeft: '12px', color: 'var(--gray-500)' }}>
+                  | 키워드 {selectedJob.crawl_stats.keywords_tried}/{selectedJob.crawl_stats.keywords_total}개 탐색
+                  | 채널 {selectedJob.crawl_stats.channels_discovered}개 발견
+                  {selectedJob.crawl_stats.duplicates_skipped > 0 &&
+                    ` | 중복 ${selectedJob.crawl_stats.duplicates_skipped}건 건너뜀`}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Table */}
           {leadsLoading ? (
             <div className="loading-state">불러오는 중...</div>
@@ -186,6 +211,7 @@ export default function CollectionResults({ initialJobId }: Props) {
                       <th>채널명</th>
                       <th>구독자</th>
                       <th>정확도</th>
+                      <th>출처</th>
                       <th>상태</th>
                     </tr>
                   </thead>
@@ -215,6 +241,13 @@ export default function CollectionResults({ initialJobId }: Props) {
                           <span className={`confidence ${confidenceClass(lead.confidence_score)}`}>
                             {Math.round(lead.confidence_score * 100)}%
                           </span>
+                        </td>
+                        <td>
+                          {lead.source_type && (
+                            <span className="source-badge" title={lead.source_url || undefined}>
+                              {SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}
+                            </span>
+                          )}
                         </td>
                         <td><StatusBadge status={lead.status} /></td>
                       </tr>

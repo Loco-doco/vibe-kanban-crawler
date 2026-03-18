@@ -20,6 +20,18 @@ export interface Job {
   completed_at: string | null
   inserted_at: string
   updated_at: string
+  termination_reason: string | null
+  crawl_stats: {
+    termination_reason: string
+    qualified_count: number
+    total_emitted: number
+    target_count: number
+    keywords_tried: number
+    keywords_total: number
+    channels_discovered: number
+    channels_no_email: number
+    duplicates_skipped: number
+  } | null
   progress: {
     collected: number
     target: number
@@ -40,6 +52,10 @@ export interface Lead {
   status: 'scraped' | 'verified' | 'contacted' | 'replied' | 'bounced' | 'manual_review'
   last_contacted_at: string | null
   notes: string | null
+  source_platform: string | null
+  source_type: string | null
+  source_url: string | null
+  discovery_keyword: string | null
   job_id: number
   inserted_at: string
 }
@@ -104,6 +120,24 @@ export const STATUS_LABELS: Record<string, string> = {
   completed: '완료',
   failed: '오류 발생',
   cancelled: '취소됨',
+}
+
+export const TERMINATION_LABELS: Record<string, string> = {
+  target_reached: '목표 수량 달성',
+  sources_exhausted: '모든 소스 탐색 완료',
+  duplicate_heavy: '중복 비율 과다',
+  insufficient_contact_coverage: '연락처 확보율 부족',
+  timeout: '시간 초과',
+  user_cancelled: '사용자 중단',
+  system_error: '시스템 오류',
+}
+
+export const SOURCE_TYPE_LABELS: Record<string, string> = {
+  profile_page: '프로필',
+  about_page: '소개',
+  search_result: '검색결과',
+  external_site: '외부사이트',
+  contact_page: '연락처',
 }
 
 export const SUGGESTED_CATEGORIES = [

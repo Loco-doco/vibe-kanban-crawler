@@ -1182,6 +1182,62 @@ body {
   color: var(--danger);
 }
 
+.campaign-termination {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--gray-50);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.termination-label {
+  font-weight: 600;
+  color: var(--gray-700);
+}
+.termination-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.termination-badge.target_reached {
+  background: var(--success-light);
+  color: var(--success-dark);
+}
+.termination-badge.sources_exhausted,
+.termination-badge.insufficient_contact_coverage,
+.termination-badge.duplicate_heavy {
+  background: var(--warning-light);
+  color: #92400e;
+}
+.termination-badge.timeout,
+.termination-badge.system_error {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+.termination-badge.user_cancelled {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+.termination-stats {
+  color: var(--gray-400);
+  font-size: 0.75rem;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
 .campaign-actions {
   display: flex;
   gap: 8px;
