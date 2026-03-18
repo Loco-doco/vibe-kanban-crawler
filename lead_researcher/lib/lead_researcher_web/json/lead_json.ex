@@ -18,6 +18,10 @@ defmodule LeadResearcherWeb.LeadJSON do
       status: lead.status,
       last_contacted_at: lead.last_contacted_at,
       notes: lead.notes,
+      source_platform: lead.source_platform,
+      source_type: lead.source_type,
+      source_url: lead.source_url,
+      discovery_keyword: lead.discovery_keyword,
       job_id: lead.job_id,
       inserted_at: lead.inserted_at
     }

@@ -15,6 +15,10 @@ defmodule LeadResearcher.Leads.Lead do
     field :notes, :string
     field :raw_data, :string
     field :email_verified, :boolean, default: false
+    field :source_platform, :string
+    field :source_type, :string
+    field :source_url, :string
+    field :discovery_keyword, :string
 
     belongs_to :job, LeadResearcher.Jobs.Job
 
@@ -26,7 +30,8 @@ defmodule LeadResearcher.Leads.Lead do
     |> cast(attrs, [
       :email, :platform, :channel_name, :channel_url, :evidence_link,
       :confidence_score, :subscriber_count, :status, :last_contacted_at,
-      :notes, :raw_data, :job_id, :email_verified
+      :notes, :raw_data, :job_id, :email_verified,
+      :source_platform, :source_type, :source_url, :discovery_keyword
     ])
     |> validate_required([:evidence_link, :job_id])
     |> validate_inclusion(:status, ~w(scraped verified contacted replied bounced manual_review))

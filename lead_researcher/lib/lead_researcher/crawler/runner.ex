@@ -65,14 +65,34 @@ defmodule LeadResearcher.Crawler.Runner do
       end
     end
 
-    case Bridge.run(config, on_lead) do
+    on_summary = fn summary_data ->
+      Logger.info(
+        "Job #{job_id} summary: #{inspect(summary_data)}"
+      )
+
+      termination_reason = summary_data["termination_reason"]
+      crawl_stats = Jason.encode!(summary_data)
+
+      Jobs.update_job(job, %{
+        termination_reason: termination_reason,
+        crawl_stats: crawl_stats
+      })
+    end
+
+    case Bridge.run(config, on_lead, on_summary) do
       :ok ->
         count = :counters.get(count_ref, 1)
         Logger.info("Job #{job_id} completed. #{count} new leads saved.")
         :ok
 
+      {:error, :timeout} ->
+        Logger.error("Job #{job_id} timed out")
+        Jobs.update_job(job, %{termination_reason: "timeout"})
+        {:error, :timeout}
+
       {:error, reason} ->
         Logger.error("Job #{job_id} failed: #{inspect(reason)}")
+        Jobs.update_job(job, %{termination_reason: "system_error"})
         {:error, reason}
     end
   end
@@ -97,6 +117,10 @@ defmodule LeadResearcher.Crawler.Runner do
       evidence_link: lead_data["evidence_link"],
       confidence_score: lead_data["confidence_score"] || 0.5,
       subscriber_count: lead_data["subscriber_count"],
+      source_platform: lead_data["source_platform"],
+      source_type: lead_data["source_type"],
+      source_url: lead_data["source_url"],
+      discovery_keyword: lead_data["discovery_keyword"],
       raw_data: Jason.encode!(lead_data),
       job_id: job_id,
       status: if(lead_data["email"], do: "scraped", else: "manual_review")

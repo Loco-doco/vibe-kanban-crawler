@@ -22,6 +22,8 @@ defmodule LeadResearcher.Jobs.Job do
     field :label, :string
     field :mode, :string, default: "url"
     field :keywords, :string
+    field :termination_reason, :string
+    field :crawl_stats, :string
 
     has_many :leads, LeadResearcher.Leads.Lead
 
@@ -34,7 +36,8 @@ defmodule LeadResearcher.Jobs.Job do
       :targets, :status, :max_retries, :delay_ms, :max_depth,
       :total_leads_found, :error_message, :started_at, :completed_at,
       :platform, :category_tags, :target_count, :subscriber_min,
-      :subscriber_max, :extra_conditions, :label, :mode, :keywords
+      :subscriber_max, :extra_conditions, :label, :mode, :keywords,
+      :termination_reason, :crawl_stats
     ])
     |> validate_required([:targets])
     |> validate_inclusion(:status, ~w(pending running completed failed cancelled))

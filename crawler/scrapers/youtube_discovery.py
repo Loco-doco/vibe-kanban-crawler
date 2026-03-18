@@ -3,11 +3,15 @@ YouTube Discovery Scraper — keyword-based channel search.
 
 Scrapes YouTube search results directly (no external library dependency),
 then uses EmailFinder to search for emails across multiple sources.
+
+Supports pagination via YouTube's InnerTube continuation API
+to discover more channels per keyword.
 """
 import re
 import json
 import time
 
+import requests
 from urllib.parse import quote_plus
 
 from scrapers.base import BaseScraper
@@ -76,14 +80,29 @@ class YouTubeDiscoveryScraper(BaseScraper):
     # YouTube search filter parameter for "Channel" type results
     CHANNEL_FILTER_PARAM = "EgIQAg%3D%3D"
 
-    def scrape(self, query, subscriber_min=None, subscriber_max=None):
+    # Default InnerTube API key (public, used by YouTube web client)
+    _DEFAULT_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+
+    def scrape(self, query, subscriber_min=None, subscriber_max=None, remaining_target=None):
         """
         Generator: search YouTube channels by keyword,
         filter by subscriber range, then find emails using EmailFinder.
+
+        Args:
+            remaining_target: how many more qualified leads are needed.
+                Controls search depth (more pages when close to target).
         """
         _log(f"Searching YouTube channels for: {query}")
 
-        channels = self._search_youtube(query)
+        # Determine search depth based on remaining target
+        max_pages = 1
+        if remaining_target is not None:
+            if remaining_target <= 5:
+                max_pages = 3
+            elif remaining_target <= 20:
+                max_pages = 2
+
+        channels = self._search_youtube(query, max_pages=max_pages)
         if not channels:
             _error(f"No channels found for: {query}")
             return
@@ -135,12 +154,19 @@ class YouTubeDiscoveryScraper(BaseScraper):
                             "confidence_score": 0.85,
                             "subscriber_count": sub_count,
                             "source": "youtube_search_desc",
+                            "source_platform": "youtube",
+                            "source_type": "search_result",
+                            "source_url": channel_url,
                         }
 
             # Then use EmailFinder for deeper search
             for lead in email_finder.find_emails(channel_title, channel_url, channel_id):
                 lead["channel_name"] = lead.get("channel_name") or channel_title
                 lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
+                # Ensure source metadata defaults
+                lead.setdefault("source_platform", "youtube")
+                lead.setdefault("source_type", "profile_page")
+                lead.setdefault("source_url", channel_url)
                 # Skip if we already found this email from description
                 if lead.get("email") and lead["email"].lower() in found_emails:
                     continue
@@ -156,13 +182,18 @@ class YouTubeDiscoveryScraper(BaseScraper):
                     "evidence_link": channel_url,
                     "confidence_score": 0.3,
                     "subscriber_count": sub_count,
+                    "source_platform": "youtube",
+                    "source_type": "profile_page",
+                    "source_url": channel_url,
                 }
 
             # Respect delay between channels
             time.sleep(self.delay_ms / 1000)
 
-    def _search_youtube(self, query):
-        """Search YouTube for channels by scraping the search results page."""
+    # ── YouTube Search with Pagination ──
+
+    def _search_youtube(self, query, max_pages=1):
+        """Search YouTube for channels, with pagination via continuation tokens."""
         encoded_query = quote_plus(query)
         search_url = (
             f"https://www.youtube.com/results"
@@ -170,6 +201,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
             f"&sp={self.CHANNEL_FILTER_PARAM}"
         )
 
+        # Page 1: regular HTML fetch
         html = fetch_with_retry(search_url, self.max_retries, self.delay_ms)
         if not html:
             _error("Failed to fetch YouTube search results page")
@@ -180,7 +212,49 @@ class YouTubeDiscoveryScraper(BaseScraper):
             _error("Failed to parse ytInitialData from YouTube search page")
             return []
 
-        return self._parse_search_results(data)
+        all_channels = []
+        seen_urls = set()
+
+        channels = self._parse_search_results(data)
+        for ch in channels:
+            if ch["url"] and ch["url"] not in seen_urls:
+                seen_urls.add(ch["url"])
+                all_channels.append(ch)
+
+        _log(f"Page 1: {len(channels)} channels for \"{query}\"")
+
+        # Pages 2+: use continuation tokens via InnerTube API
+        if max_pages > 1:
+            api_key = self._extract_api_key(html)
+            continuation_token = self._extract_continuation_token(data)
+
+            for page_num in range(2, max_pages + 1):
+                if not continuation_token:
+                    _log(f"No continuation token available, stopping pagination at page {page_num - 1}")
+                    break
+
+                time.sleep(self.delay_ms / 1000)
+
+                next_data = self._fetch_continuation(api_key, continuation_token)
+                if not next_data:
+                    break
+
+                channels = self._parse_continuation_results(next_data)
+                new_count = 0
+                for ch in channels:
+                    if ch["url"] and ch["url"] not in seen_urls:
+                        seen_urls.add(ch["url"])
+                        all_channels.append(ch)
+                        new_count += 1
+
+                _log(f"Page {page_num}: {len(channels)} channels ({new_count} new)")
+
+                if not channels:
+                    break
+
+                continuation_token = self._extract_continuation_token_from_response(next_data)
+
+        return all_channels
 
     def _parse_search_results(self, data):
         """Extract channel info from parsed ytInitialData."""
@@ -201,44 +275,162 @@ class YouTubeDiscoveryScraper(BaseScraper):
                 ch = item.get("channelRenderer")
                 if not ch:
                     continue
-
-                title = ch.get("title", {}).get("simpleText", "")
-                channel_id = ch.get("channelId", "")
-
-                # Get channel URL (prefer canonical/vanity URL)
-                url = ""
-                nav = ch.get("navigationEndpoint", {}).get("browseEndpoint", {})
-                canonical = nav.get("canonicalBaseUrl", "")
-                if canonical:
-                    url = f"https://www.youtube.com{canonical}"
-                elif channel_id:
-                    url = f"https://www.youtube.com/channel/{channel_id}"
-
-                # Subscriber count (YouTube moved this to videoCountText)
-                sub_text = ""
-                sub_data = ch.get("videoCountText", {})
-                if "simpleText" in sub_data:
-                    sub_text = sub_data["simpleText"]
-                elif "runs" in sub_data:
-                    sub_text = "".join(r.get("text", "") for r in sub_data["runs"])
-                # Fallback: accessibility label
-                if not sub_text:
-                    acc = sub_data.get("accessibility", {}).get("accessibilityData", {})
-                    sub_text = acc.get("label", "")
-
-                # Description snippet
-                desc = ""
-                desc_snippet = ch.get("descriptionSnippet", {})
-                if "runs" in desc_snippet:
-                    desc = "".join(r.get("text", "") for r in desc_snippet["runs"])
-
-                channels.append({
-                    "title": title,
-                    "channel_id": channel_id,
-                    "url": url,
-                    "subscriber_text": sub_text,
-                    "subscriber_count": _parse_subscriber_text(sub_text),
-                    "description": desc,
-                })
+                parsed = self._parse_channel_renderer(ch)
+                if parsed:
+                    channels.append(parsed)
 
         return channels
+
+    def _parse_continuation_results(self, data):
+        """Parse channel results from InnerTube continuation API response."""
+        channels = []
+
+        actions = data.get("onResponseReceivedCommands", [])
+        for action in actions:
+            items = (
+                action.get("appendContinuationItemsAction", {})
+                .get("continuationItems", [])
+            )
+            for item in items:
+                ch = item.get("channelRenderer")
+                if not ch:
+                    continue
+                parsed = self._parse_channel_renderer(ch)
+                if parsed:
+                    channels.append(parsed)
+
+        return channels
+
+    def _parse_channel_renderer(self, ch):
+        """Parse a single channelRenderer dict into our channel format."""
+        title = ch.get("title", {}).get("simpleText", "")
+        channel_id = ch.get("channelId", "")
+
+        # Get channel URL (prefer canonical/vanity URL)
+        url = ""
+        nav = ch.get("navigationEndpoint", {}).get("browseEndpoint", {})
+        canonical = nav.get("canonicalBaseUrl", "")
+        if canonical:
+            url = f"https://www.youtube.com{canonical}"
+        elif channel_id:
+            url = f"https://www.youtube.com/channel/{channel_id}"
+
+        # Subscriber count (YouTube moved this to videoCountText in some layouts)
+        sub_text = ""
+        # Try subscriberCountText first
+        sub_data = ch.get("subscriberCountText", {})
+        if not sub_data:
+            sub_data = ch.get("videoCountText", {})
+        if "simpleText" in sub_data:
+            sub_text = sub_data["simpleText"]
+        elif "runs" in sub_data:
+            sub_text = "".join(r.get("text", "") for r in sub_data["runs"])
+        # Fallback: accessibility label
+        if not sub_text:
+            acc = sub_data.get("accessibility", {}).get("accessibilityData", {})
+            sub_text = acc.get("label", "")
+
+        # Description snippet
+        desc = ""
+        desc_snippet = ch.get("descriptionSnippet", {})
+        if "runs" in desc_snippet:
+            desc = "".join(r.get("text", "") for r in desc_snippet["runs"])
+
+        if not title:
+            return None
+
+        return {
+            "title": title,
+            "channel_id": channel_id,
+            "url": url,
+            "subscriber_text": sub_text,
+            "subscriber_count": _parse_subscriber_text(sub_text),
+            "description": desc,
+        }
+
+    # ── Pagination Helpers ──
+
+    def _extract_api_key(self, html):
+        """Extract YouTube InnerTube API key from HTML page."""
+        match = re.search(r'"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"', html)
+        if match:
+            return match.group(1)
+        return self._DEFAULT_API_KEY
+
+    def _extract_continuation_token(self, data):
+        """Extract continuation token from ytInitialData search results."""
+        contents = (
+            data
+            .get("contents", {})
+            .get("twoColumnSearchResultsRenderer", {})
+            .get("primaryContents", {})
+            .get("sectionListRenderer", {})
+            .get("contents", [])
+        )
+
+        for section in contents:
+            # Check continuationItemRenderer at section level
+            cont = section.get("continuationItemRenderer", {})
+            token = (
+                cont.get("continuationEndpoint", {})
+                .get("continuationCommand", {})
+                .get("token")
+            )
+            if token:
+                return token
+
+        return None
+
+    def _extract_continuation_token_from_response(self, data):
+        """Extract continuation token from InnerTube API continuation response."""
+        actions = data.get("onResponseReceivedCommands", [])
+        for action in actions:
+            items = (
+                action.get("appendContinuationItemsAction", {})
+                .get("continuationItems", [])
+            )
+            for item in items:
+                cont = item.get("continuationItemRenderer", {})
+                token = (
+                    cont.get("continuationEndpoint", {})
+                    .get("continuationCommand", {})
+                    .get("token")
+                )
+                if token:
+                    return token
+        return None
+
+    def _fetch_continuation(self, api_key, continuation_token):
+        """Fetch next page of YouTube search results via InnerTube continuation API."""
+        url = f"https://www.youtube.com/youtubei/v1/search?key={api_key}"
+        payload = {
+            "context": {
+                "client": {
+                    "clientName": "WEB",
+                    "clientVersion": "2.20241201.00.00",
+                    "hl": "ko",
+                    "gl": "KR",
+                }
+            },
+            "continuation": continuation_token,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Origin": "https://www.youtube.com",
+            "Referer": "https://www.youtube.com/",
+        }
+
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+            _log(f"Continuation API returned {resp.status_code}")
+            return None
+        except Exception as e:
+            _log(f"Continuation request failed: {e}")
+            return None

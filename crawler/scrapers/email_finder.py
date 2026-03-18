@@ -92,6 +92,9 @@ class EmailFinder:
                     "evidence_link": ctx["about_url"],
                     "confidence_score": 0.8,
                     "source": "youtube_about",
+                    "source_platform": "youtube",
+                    "source_type": "profile_page",
+                    "source_url": ctx["about_url"],
                 }
 
         # Strategy 2: Parse ytInitialData for channel description (most reliable)
@@ -126,6 +129,9 @@ class EmailFinder:
                                 "evidence_link": ctx["about_url"],
                                 "confidence_score": 0.85,
                                 "source": "youtube_description",
+                                "source_platform": "youtube",
+                                "source_type": "about_page",
+                                "source_url": ctx["about_url"],
                             }
 
             except json.JSONDecodeError:
@@ -149,6 +155,9 @@ class EmailFinder:
                             "evidence_link": ctx["about_url"],
                             "confidence_score": 0.75,
                             "source": "youtube_data",
+                            "source_platform": "youtube",
+                            "source_type": "profile_page",
+                            "source_url": ctx["about_url"],
                         }
 
     # ── Strategy: YouTube External Links ──
@@ -174,6 +183,9 @@ class EmailFinder:
                         "evidence_link": link,
                         "confidence_score": 0.6,
                         "source": "youtube_link",
+                        "source_platform": "website",
+                        "source_type": "external_site",
+                        "source_url": link,
                     }
 
     # ── Strategy: Web Search ──
@@ -209,6 +221,9 @@ class EmailFinder:
                             "evidence_link": result_url,
                             "confidence_score": 0.7,
                             "source": "web_search",
+                            "source_platform": "website",
+                            "source_type": "external_site",
+                            "source_url": result_url,
                         }
 
     # ── Strategy: Aggregator Sites ──
@@ -234,6 +249,9 @@ class EmailFinder:
                         "evidence_link": playboard_url,
                         "confidence_score": 0.65,
                         "source": "playboard",
+                        "source_platform": "website",
+                        "source_type": "external_site",
+                        "source_url": playboard_url,
                     }
 
     # ── Strategy: Creator Website Deep Scan ──
@@ -284,6 +302,9 @@ class EmailFinder:
                         "evidence_link": site_url,
                         "confidence_score": 0.7,
                         "source": "creator_website",
+                        "source_platform": "website",
+                        "source_type": "profile_page",
+                        "source_url": site_url,
                     }
 
             # Follow contact/about pages on the creator's site
@@ -311,6 +332,9 @@ class EmailFinder:
                             "evidence_link": link,
                             "confidence_score": 0.7,
                             "source": "creator_website",
+                            "source_platform": "website",
+                            "source_type": "contact_page",
+                            "source_url": link,
                         }
 
     # ── Helpers ──
