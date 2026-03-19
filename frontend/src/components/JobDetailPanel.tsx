@@ -285,14 +285,24 @@ export default function JobDetailPanel({ job, onViewResults }: Props) {
       )}
 
       {/* CTA: 상태/리드 수 조건별 */}
-      {ctaLabel && onViewResults && (
+      {(ctaLabel || isDone) && (
         <div className="job-detail-cta">
-          <button
-            className="btn btn-primary btn-small"
-            onClick={() => onViewResults(job.id)}
-          >
-            {ctaLabel}
-          </button>
+          {ctaLabel && onViewResults && (
+            <button
+              className="btn btn-primary btn-small"
+              onClick={() => onViewResults(job.id)}
+            >
+              {ctaLabel}
+            </button>
+          )}
+          {isDone && hasLeads && (
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={() => window.open(`/api/export/jobs/${job.id}`, '_blank')}
+            >
+              JSON 내보내기
+            </button>
+          )}
         </div>
       )}
     </div>

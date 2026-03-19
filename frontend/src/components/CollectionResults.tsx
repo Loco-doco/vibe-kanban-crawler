@@ -118,6 +118,9 @@ export default function CollectionResults({ initialJobId }: Props) {
             <button className="btn btn-secondary" onClick={handleExportCsv}>
               {'\u2B07\uFE0F'} CSV 내보내기
             </button>
+            <button className="btn btn-secondary" onClick={() => window.open(`/api/export/leads?job_id=${selectedJobId}`, '_blank')}>
+              JSON 내보내기 (운영자용)
+            </button>
           </div>
         )}
       </div>
