@@ -1,10 +1,7 @@
 defmodule LeadResearcher.PromptParser do
   @moduledoc """
   Parses natural language prompts into structured search parameters
-  using Claude API via a Python subprocess.
-
-  API key resolution: ANTHROPIC_API_KEY environment variable only.
-  If not set, the Python parser falls back to rule-based parsing.
+  using a rule-based Python subprocess. No external AI API required.
   """
   require Logger
 
@@ -12,13 +9,7 @@ defmodule LeadResearcher.PromptParser do
   @timeout 30_000
 
   def parse(prompt) when is_binary(prompt) and byte_size(prompt) > 0 do
-    api_key = System.get_env("ANTHROPIC_API_KEY") || ""
-
-    if api_key == "" do
-      Logger.warning("[PromptParser] ANTHROPIC_API_KEY not set — will use fallback parser")
-    end
-
-    config = Jason.encode!(%{"prompt" => prompt, "api_key" => api_key})
+    config = Jason.encode!(%{"prompt" => prompt})
     python = System.find_executable("python3") || "python3"
     script = Path.join(@crawler_dir, "prompt_parser.py")
 
@@ -54,7 +45,6 @@ defmodule LeadResearcher.PromptParser do
   end
 
   defp parse_output(buffer) do
-    # Take the last non-empty line (skip any warnings/stderr)
     line =
       buffer
       |> String.split("\n")
@@ -80,7 +70,7 @@ defmodule LeadResearcher.PromptParser do
 
       {:error, _} ->
         Logger.error("[PromptParser] Failed to parse output: #{buffer}")
-        {:error, "AI 응답 파싱 실패"}
+        {:error, "파싱 실패"}
     end
   end
 end

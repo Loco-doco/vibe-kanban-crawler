@@ -42,15 +42,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   // Input step
   const [prompt, setPrompt] = useState('')
 
-  // Editable parsed fields (populated by AI, editable by user)
+  // Editable parsed fields (populated by parser, editable by user)
   const [keywords, setKeywords] = useState<string[]>([])
   const [categoryTags, setCategoryTags] = useState<string[]>([])
   const [subscriberMin, setSubscriberMin] = useState('')
   const [subscriberMax, setSubscriberMax] = useState('')
   const [newKeyword, setNewKeyword] = useState('')
   const [extraConditions, setExtraConditions] = useState<string | null>(null)
-  const [parseMode, setParseMode] = useState<'ai' | 'fallback' | null>(null)
-  const [aiError, setAiError] = useState<string | null>(null)
 
   // Settings
   const [targetCount, setTargetCount] = useState('30')
@@ -74,8 +72,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMin(result.subscriber_min ? String(result.subscriber_min) : '')
       setSubscriberMax(result.subscriber_max ? String(result.subscriber_max) : '')
       setExtraConditions(result.extra_conditions || null)
-      setParseMode(result.parse_mode || (result._fallback ? 'fallback' : 'ai'))
-      setAiError(result._ai_error || null)
       setParseError('')
       setStep('confirm')
     },
@@ -103,8 +99,6 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setMaxRetries('3')
       setDelayMs('2000')
       setShowOptions(false)
-      setParseMode(null)
-      setAiError(null)
       setStep('input')
       onCreated?.()
     },
@@ -230,32 +224,22 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           disabled={isProcessing || !prompt.trim()}
           style={{ marginBottom: 16 }}
         >
-          {step === 'parsing' ? 'AI 분석 중...' : 'AI로 검색 조건 분석'}
+          {step === 'parsing' ? '분석 중...' : '검색 조건 분석'}
         </button>
       )}
 
       {/* Step 2: 편집 가능한 분석 결과 + 설정 */}
       {step === 'confirm' && (
         <>
-          {/* AI 분석 결과 헤더 */}
+          {/* 분석 결과 헤더 */}
           <div className="parsed-header">
             <h4 className="setup-section-title" style={{ margin: 0 }}>
-              {parseMode === 'fallback' ? '검색 조건 분석 결과' : 'AI 분석 결과'}
-              <span className={`parse-mode-badge ${parseMode === 'ai' ? 'parse-mode-ai' : 'parse-mode-fallback'}`}>
-                {parseMode === 'ai' ? 'AI' : '기본'}
-              </span>
+              검색 조건 분석 결과
             </h4>
             <button type="button" className="btn-text" onClick={handleBack}>
               다시 입력
             </button>
           </div>
-          {parseMode === 'fallback' && (
-            <p className="parsed-fallback-notice">
-              {aiError
-                ? `AI 분석 실패 (${aiError}) — 기본 파서로 분석했습니다. 키워드를 직접 수정해주세요.`
-                : 'API 키가 설정되지 않아 기본 파서로 분석했습니다.'}
-            </p>
-          )}
 
           {/* 편집 가능: 검색 키워드 */}
           <div className="setup-section">

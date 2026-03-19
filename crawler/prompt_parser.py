@@ -3,52 +3,14 @@
 Prompt Parser — extracts structured search parameters from natural language.
 
 Protocol:
-  stdin:  {"prompt": "...", "api_key": "..."}
-  stdout: {"keywords": [...], "parse_mode": "ai"|"fallback", ...}
+  stdin:  {"prompt": "..."}
+  stdout: {"keywords": [...], "parse_mode": "rule_based", ...}
 
-Routes:
-  api_key present → AI parse (Claude API) → on failure → fallback
-  api_key absent  → fallback parse (rule-based)
+Rule-based parser only. No external AI API required.
 """
 import sys
 import json
 import re
-
-SYSTEM_PROMPT = """당신은 YouTube 크리에이터 탐색 전문가입니다.
-사용자가 자연어로 찾고 싶은 크리에이터를 설명하면, YouTube에서 실제로 그런 크리에이터를 발견할 수 있는 **검색 전략**을 설계합니다.
-
-핵심 원칙:
-- 사용자의 비즈니스 의도를 파악하고, 그 의도에 맞는 크리에이터가 YouTube에서 어떤 콘텐츠를 올리는지 역추론하세요.
-- "실물 상품을 파는 크리에이터"를 찾으려면 → "유튜버 굿즈", "크리에이터 자체 브랜드", "유튜버 쇼핑몰 운영" 같은 키워드가 유효합니다.
-- "온라인 강의를 하는 크리에이터"를 찾으려면 → "유튜버 클래스", "강의 유튜버", "온라인 코칭" 등이 유효합니다.
-- 사용자가 말한 문장을 그대로 검색어로 쓰면 안 됩니다. YouTube 검색에서 채널이 실제로 노출될 수 있는 검색어를 만들어야 합니다.
-
-반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요:
-{
-  "keywords": ["YouTube 검색 키워드1", "검색 키워드2", ...],
-  "category_tags": ["카테고리1"],
-  "subscriber_min": null,
-  "subscriber_max": null,
-  "extra_conditions": "검색으로는 필터링 불가능한 비즈니스 조건 요약"
-}
-
-규칙:
-1. keywords (최소 1개, 최대 5개):
-   - YouTube 검색에서 **채널**이 발견될 수 있는 검색어. 한국어 최적화.
-   - 사용자의 의도를 분석하여, 해당 프로필의 크리에이터가 올릴 법한 콘텐츠 주제/니치를 키워드로 변환.
-   - 다양한 검색 각도를 커버하세요 (콘텐츠 주제 + 크리에이터 유형 + 활동 형태).
-   - 예시:
-     - "스킨케어 제품도 파는 뷰티 유튜버" → ["뷰티 유튜버 자체 브랜드", "스킨케어 추천 유튜버", "화장품 리뷰 크리에이터", "뷰티 유튜버 쇼핑몰"]
-     - "부업이나 재테크 알려주는 소규모 채널" → ["부업 유튜버", "재테크 초보 강의", "투잡 브이로그", "월급 외 수입"]
-2. category_tags: 관련 카테고리 태그 배열. 없으면 빈 배열.
-3. subscriber_min / subscriber_max: 구독자 수 범위 (정수). 언급 없으면 null.
-   - "소규모" = 1000, "중소형" = 10000, "중형" = 50000, "대형" = 100000
-   - "만" = 10000, "십만" = 100000
-4. extra_conditions: 검색 키워드만으로는 필터링할 수 없는 비즈니스 조건을 한 문장으로 요약.
-   - 예: "실물 결합 상품을 판매하는 크리에이터", "기업 협업 경험이 있는 크리에이터"
-   - 이 조건은 크롤링 후 사람이 리뷰할 때 참고 기준으로 사용됩니다.
-   - 특별한 비즈니스 조건이 없으면 null.
-"""
 
 
 def log(message):
@@ -56,90 +18,9 @@ def log(message):
     print(f"[prompt_parser] {message}", file=sys.stderr, flush=True)
 
 
-# ────────────────────────────────────────────
-# AI Parse: Claude API
-# ────────────────────────────────────────────
-
-def ai_parse(prompt, api_key):
-    """
-    Call Anthropic Messages API to parse prompt.
-    Returns (result_dict, None) on success, (None, error_string) on failure.
-    """
-    import requests
-
-    log(f"ai_parse: calling Claude API (prompt length={len(prompt)})")
-
-    try:
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 512,
-                "system": SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=30,
-        )
-    except requests.exceptions.Timeout:
-        log("ai_parse: TIMEOUT — API did not respond within 30s")
-        return None, "timeout"
-    except requests.exceptions.ConnectionError as e:
-        log(f"ai_parse: CONNECTION_ERROR — {e}")
-        return None, "connection_error"
-    except requests.exceptions.RequestException as e:
-        log(f"ai_parse: REQUEST_ERROR — {e}")
-        return None, "request_error"
-
-    if response.status_code != 200:
-        log(f"ai_parse: API_ERROR — status={response.status_code} body={response.text[:200]}")
-        return None, f"api_error_{response.status_code}"
-
-    data = response.json()
-    text = data.get("content", [{}])[0].get("text", "")
-
-    if not text:
-        log("ai_parse: EMPTY_RESPONSE — no text in API response")
-        return None, "empty_response"
-
-    # Strip markdown code blocks if present
-    stripped = re.sub(r"^```(?:json)?\s*\n?", "", text.strip())
-    stripped = re.sub(r"\n?```\s*$", "", stripped)
-
-    try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        log(f"ai_parse: JSON_PARSE_ERROR — raw text: {text[:200]}")
-        return None, "json_parse_error"
-
-    keywords = parsed.get("keywords", [])
-    if not keywords:
-        log("ai_parse: NO_KEYWORDS — AI returned empty keywords")
-        return None, "no_keywords"
-
-    result = {
-        "keywords": keywords[:5],
-        "category_tags": parsed.get("category_tags", []),
-        "subscriber_min": parsed.get("subscriber_min"),
-        "subscriber_max": parsed.get("subscriber_max"),
-        "extra_conditions": parsed.get("extra_conditions"),
-        "parse_mode": "ai",
-    }
-    log(f"ai_parse: OK — keywords={result['keywords']}")
-    return result, None
-
-
-# ────────────────────────────────────────────
-# Fallback Parse: Rule-based (no AI)
-# ────────────────────────────────────────────
-
-def fallback_parse(prompt):
-    """Parse prompt locally without AI — extract keywords, subscriber range, categories."""
-    log(f"fallback_parse: starting (prompt length={len(prompt)})")
+def parse_prompt(prompt):
+    """Parse prompt using rule-based extraction — keywords, subscriber range, categories."""
+    log(f"parse_prompt: starting (prompt length={len(prompt)})")
     text = prompt.strip()
 
     # --- Extract subscriber range ---
@@ -284,16 +165,11 @@ def fallback_parse(prompt):
         "subscriber_min": subscriber_min,
         "subscriber_max": subscriber_max,
         "extra_conditions": None,
-        "parse_mode": "fallback",
-        "_fallback": True,
+        "parse_mode": "rule_based",
     }
-    log(f"fallback_parse: OK — keywords={result['keywords']}")
+    log(f"parse_prompt: OK — keywords={result['keywords']}")
     return result
 
-
-# ────────────────────────────────────────────
-# Main entry point
-# ────────────────────────────────────────────
 
 def main():
     input_line = sys.stdin.readline().strip()
@@ -308,29 +184,12 @@ def main():
         return
 
     prompt = config.get("prompt", "")
-    api_key = config.get("api_key", "")
 
     if not prompt:
         print(json.dumps({"error": "프롬프트가 비어있습니다"}))
         return
 
-    # Route 1: API key present → try AI, fallback on failure
-    if api_key:
-        result, error = ai_parse(prompt, api_key)
-        if result:
-            print(json.dumps(result, ensure_ascii=False))
-            return
-
-        # AI failed — fall through to fallback with reason logged
-        log(f"ai_parse failed ({error}), falling back to rule-based parser")
-        result = fallback_parse(prompt)
-        result["_ai_error"] = error
-        print(json.dumps(result, ensure_ascii=False))
-        return
-
-    # Route 2: No API key → fallback only
-    log("no api_key provided, using fallback parser")
-    result = fallback_parse(prompt)
+    result = parse_prompt(prompt)
     print(json.dumps(result, ensure_ascii=False))
 
 

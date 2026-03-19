@@ -27,9 +27,7 @@ export interface ParsedPrompt {
   subscriber_min: number | null
   subscriber_max: number | null
   extra_conditions: string | null
-  parse_mode?: 'ai' | 'fallback'
-  _ai_error?: string
-  _fallback?: boolean
+  parse_mode?: string
 }
 
 export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {

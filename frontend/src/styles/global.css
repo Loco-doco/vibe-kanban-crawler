@@ -1105,33 +1105,6 @@ body {
   padding: 16px;
 }
 
-.parse-mode-badge {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-left: 8px;
-  vertical-align: middle;
-  letter-spacing: 0.02em;
-}
-.parse-mode-ai {
-  background: var(--primary-50);
-  color: var(--primary-600);
-  border: 1px solid var(--primary-100);
-}
-.parse-mode-fallback {
-  background: var(--warning-light);
-  color: #92400e;
-  border: 1px solid #fde68a;
-}
-
-.parsed-fallback-notice {
-  font-size: 0.75rem;
-  color: var(--warning);
-  margin: 0 0 10px 0;
-}
-
 .parsed-tags {
   display: flex;
   flex-direction: column;
