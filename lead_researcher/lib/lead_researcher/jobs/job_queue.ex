@@ -27,6 +27,8 @@ defmodule LeadResearcher.Jobs.JobQueue do
       queue: :queue.new()
     }
 
+    # Recover stale jobs from previous server crash/restart
+    recover_stale_jobs()
     schedule_poll()
     {:ok, state}
   end
@@ -152,5 +154,31 @@ defmodule LeadResearcher.Jobs.JobQueue do
 
   defp schedule_poll do
     Process.send_after(self(), :poll, @poll_interval)
+  end
+
+  # On startup, mark any jobs stuck in running/partial_results as completed_low_yield.
+  # These were interrupted by server restart (crawler process is gone).
+  defp recover_stale_jobs do
+    import Ecto.Query
+
+    stale_statuses = ["running", "partial_results"]
+
+    stale_jobs =
+      Jobs.Job
+      |> where([j], j.status in ^stale_statuses)
+      |> LeadResearcher.Repo.all()
+
+    for job <- stale_jobs do
+      Logger.warning("Recovering stale job ##{job.id} (was #{job.status})")
+      Jobs.update_job(job, %{
+        status: "completed_low_yield",
+        termination_reason: job.termination_reason || "system_error",
+        completed_at: DateTime.utc_now()
+      })
+    end
+
+    if length(stale_jobs) > 0 do
+      Logger.info("Recovered #{length(stale_jobs)} stale job(s)")
+    end
   end
 end
