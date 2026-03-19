@@ -8,6 +8,7 @@ defmodule LeadResearcher.Enrichments.LeadEnrichment do
     field :source, :string, default: "operator"
     field :operator_id, :string
 
+    # Existing fields
     field :business_summary, :string
     field :descriptor_keywords, :string
     field :content_topics, :string
@@ -15,13 +16,25 @@ defmodule LeadResearcher.Enrichments.LeadEnrichment do
     field :suggested_email, :string
     field :operator_notes, :string
 
+    # Phase 5 extensions
+    field :profile_summary, :string
+    field :recent_activity_summary, :string
+    field :business_type, :string
+    field :secondary_platforms, :string
+    field :monetization_signals, :string
+    field :contact_channels, :string
+    field :enrichment_confidence, :float
+
     timestamps()
   end
 
   @allowed_fields [
     :lead_id, :source, :operator_id,
     :business_summary, :descriptor_keywords, :content_topics,
-    :trend_summary, :suggested_email, :operator_notes
+    :trend_summary, :suggested_email, :operator_notes,
+    :profile_summary, :recent_activity_summary, :business_type,
+    :secondary_platforms, :monetization_signals, :contact_channels,
+    :enrichment_confidence
   ]
 
   def changeset(enrichment, attrs) do

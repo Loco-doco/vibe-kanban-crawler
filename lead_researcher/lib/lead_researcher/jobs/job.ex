@@ -25,7 +25,13 @@ defmodule LeadResearcher.Jobs.Job do
     field :termination_reason, :string
     field :crawl_stats, :string
 
+    # Supplementary search linkage
+    field :parent_job_id, :integer
+    field :supplementary_type, :string
+
     has_many :leads, LeadResearcher.Leads.Lead
+    has_many :supplementary_jobs, LeadResearcher.Jobs.Job, foreign_key: :parent_job_id
+    belongs_to :parent_job, LeadResearcher.Jobs.Job, foreign_key: :parent_job_id, define_field: false
 
     timestamps()
   end
@@ -37,7 +43,8 @@ defmodule LeadResearcher.Jobs.Job do
       :total_leads_found, :error_message, :started_at, :completed_at,
       :platform, :category_tags, :target_count, :subscriber_min,
       :subscriber_max, :extra_conditions, :label, :mode, :keywords,
-      :termination_reason, :crawl_stats
+      :termination_reason, :crawl_stats,
+      :parent_job_id, :supplementary_type
     ])
     |> validate_required([:targets])
     |> validate_inclusion(:status, ~w(draft queued running partial_results completed completed_low_yield failed cancelled))

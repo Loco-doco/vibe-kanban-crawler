@@ -2,6 +2,7 @@ defmodule LeadResearcher.Leads do
   import Ecto.Query
   alias LeadResearcher.Repo
   alias LeadResearcher.Leads.Lead
+  alias LeadResearcher.EditHistories
 
   def list_leads(params \\ %{}) do
     Lead
@@ -10,6 +11,10 @@ defmodule LeadResearcher.Leads do
     |> maybe_filter_status(params)
     |> maybe_filter_min_confidence(params)
     |> maybe_filter_has_email(params)
+    |> maybe_filter_email_status(params)
+    |> maybe_filter_review_status(params)
+    |> maybe_filter_enrichment_status(params)
+    |> maybe_filter_audience_tier(params)
     |> maybe_search(params)
     |> apply_sort(params)
     |> limit(^parse_int(params, "limit", 50))
@@ -36,6 +41,51 @@ defmodule LeadResearcher.Leads do
     |> Repo.update()
   end
 
+  @doc """
+  Update lead with edit history tracking.
+  Only records changes for fields that actually changed.
+  Auto-sets email_status to "user_corrected" when contact_email changes.
+  """
+  def update_lead_with_history(%Lead{} = lead, attrs, edited_by \\ "user") do
+    # Detect actual changes
+    changes =
+      attrs
+      |> Enum.filter(fn {field, new_val} ->
+        old_val = Map.get(lead, field)
+        to_string_or_nil(old_val) != to_string_or_nil(new_val)
+      end)
+      |> Enum.map(fn {field, new_val} ->
+        {field, {Map.get(lead, field), new_val}}
+      end)
+
+    if changes == [] do
+      {:ok, lead}
+    else
+      # Auto-set email_status when contact_email is edited
+      final_attrs =
+        if Map.has_key?(attrs, :contact_email) do
+          Map.put(attrs, :email_status, "user_corrected")
+        else
+          attrs
+        end
+
+      case update_lead(lead, final_attrs) do
+        {:ok, updated} ->
+          EditHistories.log_changes(lead.id, changes, edited_by)
+          {:ok, Repo.preload(updated, :enrichment)}
+
+        error ->
+          error
+      end
+    end
+  end
+
+  @doc "Bulk update review_status for multiple leads"
+  def bulk_update_review(lead_ids, review_status) when is_list(lead_ids) do
+    from(l in Lead, where: l.id in ^lead_ids)
+    |> Repo.update_all(set: [review_status: review_status, updated_at: DateTime.utc_now() |> DateTime.truncate(:second)])
+  end
+
   def merge_lead(%Lead{} = existing, new_attrs) do
     merged =
       %{}
@@ -43,6 +93,13 @@ defmodule LeadResearcher.Leads do
       |> maybe_merge_field(existing, new_attrs, :channel_name)
       |> maybe_merge_field(existing, new_attrs, :subscriber_count)
       |> Map.put(:confidence_score, max(existing.confidence_score, new_attrs[:confidence_score] || 0.0))
+
+    # Also merge audience fields if new data available
+    merged =
+      merged
+      |> maybe_merge_field(existing, new_attrs, :email_status)
+      |> maybe_merge_field(existing, new_attrs, :audience_metric_type)
+      |> maybe_merge_field(existing, new_attrs, :audience_tier)
 
     update_lead(existing, merged)
   end
@@ -63,6 +120,12 @@ defmodule LeadResearcher.Leads do
     pattern = "%@#{domain}"
     Repo.one(from l in Lead, where: like(l.email, ^pattern), limit: 1)
   end
+
+  def delete_lead(%Lead{} = lead) do
+    Repo.delete(lead)
+  end
+
+  # Private helpers
 
   defp maybe_merge_field(map, existing, new_attrs, field) do
     new_val = Map.get(new_attrs, field)
@@ -93,6 +156,30 @@ defmodule LeadResearcher.Leads do
 
   defp maybe_filter_status(query, _), do: query
 
+  defp maybe_filter_email_status(query, %{"email_status" => es}) when is_binary(es) do
+    where(query, [l], l.email_status == ^es)
+  end
+
+  defp maybe_filter_email_status(query, _), do: query
+
+  defp maybe_filter_review_status(query, %{"review_status" => rs}) when is_binary(rs) do
+    where(query, [l], l.review_status == ^rs)
+  end
+
+  defp maybe_filter_review_status(query, _), do: query
+
+  defp maybe_filter_enrichment_status(query, %{"enrichment_status" => es}) when is_binary(es) do
+    where(query, [l], l.enrichment_status == ^es)
+  end
+
+  defp maybe_filter_enrichment_status(query, _), do: query
+
+  defp maybe_filter_audience_tier(query, %{"audience_tier" => tier}) when is_binary(tier) do
+    where(query, [l], l.audience_tier == ^tier)
+  end
+
+  defp maybe_filter_audience_tier(query, _), do: query
+
   defp maybe_filter_min_confidence(query, %{"min_confidence" => min}) do
     min_val = parse_float(min)
     where(query, [l], l.confidence_score >= ^min_val)
@@ -112,7 +199,13 @@ defmodule LeadResearcher.Leads do
 
   defp maybe_search(query, %{"search" => search}) when is_binary(search) and search != "" do
     pattern = "%#{search}%"
-    where(query, [l], like(l.email, ^pattern) or like(l.channel_name, ^pattern))
+
+    where(
+      query,
+      [l],
+      like(l.email, ^pattern) or like(l.channel_name, ^pattern) or
+        like(l.display_name, ^pattern) or like(l.contact_email, ^pattern)
+    )
   end
 
   defp maybe_search(query, _), do: query
@@ -131,6 +224,10 @@ defmodule LeadResearcher.Leads do
   defp safe_sort_field("subscriber_count"), do: :subscriber_count
   defp safe_sort_field("email"), do: :email
   defp safe_sort_field("platform"), do: :platform
+  defp safe_sort_field("updated_at"), do: :updated_at
+  defp safe_sort_field("email_status"), do: :email_status
+  defp safe_sort_field("audience_tier"), do: :audience_tier
+  defp safe_sort_field("review_status"), do: :review_status
   defp safe_sort_field(_), do: :inserted_at
 
   defp parse_int(params, key, default) do
@@ -151,7 +248,6 @@ defmodule LeadResearcher.Leads do
   defp parse_float(val) when is_binary(val), do: String.to_float(val)
   defp parse_float(_), do: 0.0
 
-  def delete_lead(%Lead{} = lead) do
-    Repo.delete(lead)
-  end
+  defp to_string_or_nil(nil), do: nil
+  defp to_string_or_nil(val), do: to_string(val)
 end

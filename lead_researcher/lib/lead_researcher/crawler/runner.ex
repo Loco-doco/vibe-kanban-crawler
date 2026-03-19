@@ -2,6 +2,7 @@ defmodule LeadResearcher.Crawler.Runner do
   require Logger
 
   alias LeadResearcher.{Jobs, Leads}
+  alias LeadResearcher.Leads.Lead
   alias LeadResearcher.Crawler.Bridge
   alias LeadResearcher.Dedup
   alias LeadResearcher.Validation.EmailValidator
@@ -121,21 +122,43 @@ defmodule LeadResearcher.Crawler.Runner do
   end
 
   defp process_lead(lead_data, job_id) do
+    email = lead_data["email"]
+    platform = lead_data["platform"] || "unknown"
+    sub_count = lead_data["subscriber_count"]
+
+    email_status =
+      cond do
+        is_nil(email) or email == "" -> "missing"
+        EmailValidator.valid?(email) -> "valid_syntax"
+        true -> "invalid_syntax"
+      end
+
+    audience_metric_type =
+      case platform do
+        "youtube" -> "subscriber"
+        "instagram" -> "follower"
+        _ -> "unknown"
+      end
+
     attrs = %{
-      email: lead_data["email"],
-      platform: lead_data["platform"] || "unknown",
+      email: email,
+      platform: platform,
       channel_name: lead_data["channel_name"],
       channel_url: lead_data["channel_url"],
       evidence_link: lead_data["evidence_link"],
       confidence_score: lead_data["confidence_score"] || 0.5,
-      subscriber_count: lead_data["subscriber_count"],
+      subscriber_count: sub_count,
       source_platform: lead_data["source_platform"],
       source_type: lead_data["source_type"],
       source_url: lead_data["source_url"],
       discovery_keyword: lead_data["discovery_keyword"],
       raw_data: Jason.encode!(lead_data),
       job_id: job_id,
-      status: if(lead_data["email"], do: "scraped", else: "manual_review")
+      status: if(email, do: "scraped", else: "manual_review"),
+      email_status: email_status,
+      audience_metric_type: audience_metric_type,
+      audience_tier: Lead.compute_audience_tier(sub_count),
+      audience_source: "crawler"
     }
 
     case Dedup.check(attrs) do

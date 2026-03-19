@@ -3,6 +3,7 @@ defmodule LeadResearcher.Leads.Lead do
   import Ecto.Changeset
 
   schema "leads" do
+    # Raw crawler data (read-only evidence)
     field :email, :string
     field :platform, :string
     field :channel_name, :string
@@ -22,26 +23,59 @@ defmodule LeadResearcher.Leads.Lead do
     field :review_status, :string, default: "pending"
     field :master_sync_status, :string, default: "not_synced"
 
+    # Email status
+    field :email_status, :string, default: "missing"
+
+    # Audience metrics
+    field :audience_metric_type, :string, default: "unknown"
+    field :audience_tier, :string
+    field :audience_source, :string, default: "crawler"
+
+    # User overrides (never overwrites raw fields above)
+    field :display_name, :string
+    field :contact_email, :string
+    field :audience_size_override, :integer
+    field :audience_tier_override, :string
+
+    # Enrichment tracking
+    field :enrichment_status, :string, default: "not_started"
+
     belongs_to :job, LeadResearcher.Jobs.Job
     has_one :enrichment, LeadResearcher.Enrichments.LeadEnrichment
 
     timestamps()
   end
 
+  @cast_fields [
+    :email, :platform, :channel_name, :channel_url, :evidence_link,
+    :confidence_score, :subscriber_count, :status, :last_contacted_at,
+    :notes, :raw_data, :job_id, :email_verified,
+    :source_platform, :source_type, :source_url, :discovery_keyword,
+    :review_status, :master_sync_status,
+    :email_status, :audience_metric_type, :audience_tier, :audience_source,
+    :display_name, :contact_email, :audience_size_override, :audience_tier_override,
+    :enrichment_status
+  ]
+
   def changeset(lead, attrs) do
     lead
-    |> cast(attrs, [
-      :email, :platform, :channel_name, :channel_url, :evidence_link,
-      :confidence_score, :subscriber_count, :status, :last_contacted_at,
-      :notes, :raw_data, :job_id, :email_verified,
-      :source_platform, :source_type, :source_url, :discovery_keyword,
-      :review_status, :master_sync_status
-    ])
+    |> cast(attrs, @cast_fields)
     |> validate_required([:evidence_link, :job_id])
     |> validate_inclusion(:status, ~w(scraped verified contacted replied bounced manual_review))
     |> validate_inclusion(:platform, ~w(youtube instagram class101 liveklass web unknown))
     |> validate_inclusion(:review_status, ~w(pending approved rejected held))
     |> validate_inclusion(:master_sync_status, ~w(not_synced ready conflict synced))
+    |> validate_inclusion(:email_status, ~w(missing unverified valid_syntax invalid_syntax user_corrected))
+    |> validate_inclusion(:audience_metric_type, ~w(subscriber follower member unknown))
+    |> validate_inclusion(:enrichment_status, ~w(not_started completed low_confidence failed))
     |> foreign_key_constraint(:job_id)
   end
+
+  @doc "Compute audience tier from raw subscriber/follower count"
+  def compute_audience_tier(nil), do: nil
+  def compute_audience_tier(count) when count < 1_000, do: "nano"
+  def compute_audience_tier(count) when count < 10_000, do: "micro"
+  def compute_audience_tier(count) when count < 100_000, do: "mid"
+  def compute_audience_tier(count) when count < 1_000_000, do: "macro"
+  def compute_audience_tier(_), do: "mega"
 end
