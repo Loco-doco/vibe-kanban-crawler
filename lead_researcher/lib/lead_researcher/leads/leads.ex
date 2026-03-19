@@ -15,9 +15,14 @@ defmodule LeadResearcher.Leads do
     |> limit(^parse_int(params, "limit", 50))
     |> offset(^parse_int(params, "offset", 0))
     |> Repo.all()
+    |> Repo.preload(:enrichment)
   end
 
-  def get_lead!(id), do: Repo.get!(Lead, id)
+  def get_lead!(id) do
+    Lead
+    |> Repo.get!(id)
+    |> Repo.preload(:enrichment)
+  end
 
   def create_lead(attrs) do
     %Lead{}

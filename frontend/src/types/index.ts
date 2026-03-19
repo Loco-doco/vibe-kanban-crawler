@@ -44,6 +44,18 @@ export interface Job {
   }
 }
 
+export interface LeadEnrichment {
+  business_summary: string | null
+  descriptor_keywords: string[]
+  content_topics: string[]
+  trend_summary: string | null
+  suggested_email: string | null
+  operator_notes: string | null
+  source: 'operator' | 'system'
+  operator_id: string | null
+  enriched_at: string
+}
+
 export interface Lead {
   id: number
   email: string | null
@@ -63,6 +75,7 @@ export interface Lead {
   discovery_keyword: string | null
   review_status: ReviewStatus
   master_sync_status: MasterSyncStatus
+  enrichment: LeadEnrichment | null
   job_id: number
   inserted_at: string
 }

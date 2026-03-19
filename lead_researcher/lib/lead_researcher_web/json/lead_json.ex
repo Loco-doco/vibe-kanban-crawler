@@ -1,11 +1,12 @@
 defmodule LeadResearcherWeb.LeadJSON do
   alias LeadResearcher.Leads.Lead
+  alias LeadResearcher.Enrichments.LeadEnrichment
 
   def index(%{leads: leads}), do: %{data: for(lead <- leads, do: data(lead))}
   def show(%{lead: lead}), do: %{data: data(lead)}
 
   defp data(%Lead{} = lead) do
-    %{
+    base = %{
       id: lead.id,
       email: lead.email,
       email_verified: lead.email_verified || false,
@@ -27,5 +28,37 @@ defmodule LeadResearcherWeb.LeadJSON do
       job_id: lead.job_id,
       inserted_at: lead.inserted_at
     }
+
+    enrichment =
+      case lead.enrichment do
+        %LeadEnrichment{} = e ->
+          %{
+            business_summary: e.business_summary,
+            descriptor_keywords: safe_decode_json(e.descriptor_keywords, []),
+            content_topics: safe_decode_json(e.content_topics, []),
+            trend_summary: e.trend_summary,
+            suggested_email: e.suggested_email,
+            operator_notes: e.operator_notes,
+            source: e.source,
+            operator_id: e.operator_id,
+            enriched_at: e.updated_at
+          }
+
+        _ ->
+          nil
+      end
+
+    Map.put(base, :enrichment, enrichment)
   end
+
+  defp safe_decode_json(nil, default), do: default
+
+  defp safe_decode_json(val, default) when is_binary(val) do
+    case Jason.decode(val) do
+      {:ok, result} -> result
+      _ -> default
+    end
+  end
+
+  defp safe_decode_json(_, default), do: default
 end
