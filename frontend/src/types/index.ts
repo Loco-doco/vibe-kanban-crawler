@@ -2,6 +2,13 @@ export type JobStatus = 'draft' | 'queued' | 'running' | 'partial_results' | 'co
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'held'
 export type MasterSyncStatus = 'not_synced' | 'ready' | 'conflict' | 'synced'
+export type EmailStatus = 'missing' | 'unverified' | 'valid_syntax' | 'invalid_syntax' | 'user_corrected'
+export type AudienceMetricType = 'subscriber' | 'follower' | 'member' | 'unknown'
+export type AudienceTier = 'nano' | 'micro' | 'mid' | 'macro' | 'mega'
+export type AudienceDisplayStatus = 'collected' | 'not_collected' | 'not_applicable'
+export type EnrichmentStatus = 'not_started' | 'completed' | 'low_confidence' | 'failed'
+export type QualityJudgment = 'healthy' | 'low_email_coverage' | 'high_invalid_email_rate' | 'low_audience_coverage'
+export type SupplementaryType = 'email_supplement' | 'audience_supplement' | 'meta_supplement'
 
 export interface Job {
   id: number
@@ -42,13 +49,22 @@ export interface Job {
     target: number
     percentage: number
   }
+  parent_job_id: number | null
+  supplementary_type: SupplementaryType | null
 }
 
 export interface LeadEnrichment {
   business_summary: string | null
+  business_type: string | null
   descriptor_keywords: string[]
   content_topics: string[]
   trend_summary: string | null
+  profile_summary: string | null
+  recent_activity_summary: string | null
+  secondary_platforms: string[]
+  monetization_signals: string[]
+  contact_channels: string[]
+  enrichment_confidence: number | null
   suggested_email: string | null
   operator_notes: string | null
   source: 'operator' | 'system'
@@ -58,6 +74,7 @@ export interface LeadEnrichment {
 
 export interface Lead {
   id: number
+  // Raw crawler fields (read-only evidence)
   email: string | null
   email_verified: boolean
   platform: 'youtube' | 'instagram' | 'class101' | 'liveklass' | 'web' | 'unknown'
@@ -75,9 +92,54 @@ export interface Lead {
   discovery_keyword: string | null
   review_status: ReviewStatus
   master_sync_status: MasterSyncStatus
+  // Phase 5 fields
+  email_status: EmailStatus
+  audience_metric_type: AudienceMetricType
+  audience_tier: AudienceTier | null
+  audience_source: string
+  display_name: string | null
+  contact_email: string | null
+  audience_size_override: number | null
+  audience_tier_override: AudienceTier | null
+  enrichment_status: EnrichmentStatus
+  // Computed effective values
+  effective_name: string | null
+  effective_email: string | null
+  effective_audience_size: number | null
+  effective_audience_tier: AudienceTier | null
+  effective_audience_label: string | null
+  audience_display_status: AudienceDisplayStatus
+  // Relations
   enrichment: LeadEnrichment | null
   job_id: number
   inserted_at: string
+  updated_at: string
+}
+
+export interface QualityMetrics {
+  total_leads: number
+  reviewable_leads: number
+  contact_present_leads: number
+  valid_email_leads: number
+  invalid_email_leads: number
+  user_corrected_leads: number
+  contact_coverage_rate: number
+  valid_email_coverage_rate: number
+  invalid_email_rate: number
+  audience_present_leads: number
+  audience_coverage_rate: number
+  enrichment_completed_leads: number
+  enrichment_coverage_rate: number
+  judgment: QualityJudgment
+  suggested_supplement: SupplementaryType | null
+}
+
+export interface EditHistoryEntry {
+  field_name: string
+  old_value: string | null
+  new_value: string | null
+  edited_by: string
+  edited_at: string
 }
 
 export interface CreateJobPayload {
@@ -175,6 +237,42 @@ export const MASTER_SYNC_LABELS: Record<string, string> = {
   ready: '반영 가능',
   conflict: '충돌',
   synced: '반영 완료',
+}
+
+export const EMAIL_STATUS_LABELS: Record<string, string> = {
+  missing: '없음',
+  unverified: '미검증',
+  valid_syntax: '유효',
+  invalid_syntax: '무효',
+  user_corrected: '수정됨',
+}
+
+export const AUDIENCE_TIER_LABELS: Record<string, string> = {
+  nano: 'Nano',
+  micro: 'Micro',
+  mid: 'Mid',
+  macro: 'Macro',
+  mega: 'Mega',
+}
+
+export const ENRICHMENT_STATUS_LABELS: Record<string, string> = {
+  not_started: '미시작',
+  completed: '완료',
+  low_confidence: '신뢰도 낮음',
+  failed: '실패',
+}
+
+export const AUDIENCE_DISPLAY_STATUS_LABELS: Record<string, string> = {
+  collected: '',
+  not_collected: '미수집',
+  not_applicable: '해당 없음',
+}
+
+export const QUALITY_JUDGMENT_LABELS: Record<string, string> = {
+  healthy: '이메일 확보율 양호',
+  low_email_coverage: '이메일 확보율이 낮아 보완 탐색이 권장됩니다.',
+  high_invalid_email_rate: '이메일 품질이 낮아 검토 전 보완이 필요합니다.',
+  low_audience_coverage: '영향력 지표 미수집 비율이 높습니다.',
 }
 
 export const TERMINATION_SENTENCES: Record<string, string> = {

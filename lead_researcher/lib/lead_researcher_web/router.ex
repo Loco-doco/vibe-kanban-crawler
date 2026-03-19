@@ -16,6 +16,11 @@ defmodule LeadResearcherWeb.Router do
 
     get "/leads/export/csv", LeadController, :export_csv
     resources "/leads", LeadController, only: [:index, :show, :update, :delete]
+    post "/leads/bulk-review", LeadController, :bulk_review
+    get "/leads/:id/edit-history", LeadController, :edit_history
+
+    # Quality metrics
+    get "/quality/jobs/:id", QualityController, :show
 
     # Export / Import for operator assist
     get "/export/jobs/:id", ExportController, :export_job
