@@ -4,9 +4,10 @@ import { getJobs } from '../api/jobs'
 import CollectionSetupForm from '../components/CollectionSetupForm'
 import JobMonitor from '../components/JobMonitor'
 import CollectionResults from '../components/CollectionResults'
+import EnrichmentImport from '../components/EnrichmentImport'
 import type { Job } from '../types'
 
-type TabKey = 'setup' | 'monitor' | 'results'
+type TabKey = 'setup' | 'monitor' | 'results' | 'operator'
 
 export default function Collection() {
   const [activeTab, setActiveTab] = useState<TabKey>('setup')
@@ -52,6 +53,13 @@ export default function Collection() {
           <span className="collection-tab-icon">{'\u{1F4CA}'}</span>
           탐색 결과
         </button>
+        <button
+          className={`collection-tab${activeTab === 'operator' ? ' active' : ''}`}
+          onClick={() => setActiveTab('operator')}
+        >
+          <span className="collection-tab-icon">{'\u{1F6E0}\uFE0F'}</span>
+          운영자 도구
+        </button>
       </div>
 
       <div className="collection-tab-content">
@@ -63,6 +71,9 @@ export default function Collection() {
         )}
         {activeTab === 'results' && (
           <CollectionResults initialJobId={resultJobId} />
+        )}
+        {activeTab === 'operator' && (
+          <EnrichmentImport />
         )}
       </div>
     </>

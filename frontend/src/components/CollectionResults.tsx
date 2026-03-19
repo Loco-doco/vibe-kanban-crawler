@@ -223,6 +223,7 @@ export default function CollectionResults({ initialJobId }: Props) {
                       <th>구독자</th>
                       <th>정확도</th>
                       <th>출처</th>
+                      <th>보강</th>
                       <th>상태</th>
                     </tr>
                   </thead>
@@ -257,6 +258,13 @@ export default function CollectionResults({ initialJobId }: Props) {
                           {lead.source_type && (
                             <span className="source-badge" title={lead.source_url || undefined}>
                               {SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {lead.enrichment && (
+                            <span className="enrichment-badge" title={lead.enrichment.business_summary || undefined}>
+                              보강
                             </span>
                           )}
                         </td>
