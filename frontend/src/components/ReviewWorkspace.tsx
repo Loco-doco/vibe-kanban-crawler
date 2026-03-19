@@ -7,6 +7,7 @@ import ReviewKPICards from './ReviewKPICards'
 import QualityBanner from './QualityBanner'
 import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
+import LeadDetailDrawer from './LeadDetailDrawer'
 import type { Job, Lead, ReviewStatus } from '../types'
 
 interface Props {
@@ -95,15 +96,20 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
 
   const handleRowClick = useCallback((lead: Lead) => {
     setSelectedLead(lead)
-    // LeadDetailDrawer will be added in Issue 5-4
   }, [])
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedLead(null)
+  }, [])
+
+  const handleLeadUpdated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['leads'] })
+    queryClient.invalidateQueries({ queryKey: ['quality'] })
+  }, [queryClient])
 
   const handleSupplementarySearch = useCallback((_type: string) => {
     // SupplementarySearchModal will be added in Issue 5-5
   }, [])
-
-  // Suppress unused var warning for selectedLead (used in 5-4)
-  void selectedLead
 
   return (
     <div className="review-workspace">
@@ -215,6 +221,15 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
           </>
         )}
       </div>
+
+      {/* Lead Detail Drawer */}
+      {selectedLead && (
+        <LeadDetailDrawer
+          lead={selectedLead}
+          onClose={handleCloseDrawer}
+          onUpdated={handleLeadUpdated}
+        />
+      )}
     </div>
   )
 }

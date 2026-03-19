@@ -2356,3 +2356,327 @@ body {
   .review-sidebar { width: 100%; min-width: unset; max-height: 200px; border-right: none; border-bottom: 1px solid var(--gray-200); border-radius: var(--radius) var(--radius) 0 0; }
   .review-main { border-radius: 0 0 var(--radius) var(--radius); }
 }
+
+/* ===== Lead Detail Drawer ===== */
+.drawer-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-panel {
+  width: 480px;
+  max-width: 90vw;
+  background: white;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  animation: drawer-slide-in 0.2s ease-out;
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--gray-200);
+  flex-shrink: 0;
+}
+
+.drawer-header-info { flex: 1; min-width: 0; }
+
+.drawer-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-subtitle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.drawer-close {
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  color: var(--gray-400);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.drawer-close:hover { color: var(--gray-700); }
+
+.drawer-saving {
+  padding: 6px 24px;
+  background: var(--primary-50);
+  color: var(--primary-600);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Drawer Sections */
+.drawer-section {
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.drawer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: pointer;
+  text-align: left;
+}
+.drawer-section-header:hover { background: var(--gray-50); }
+
+.drawer-section-chevron {
+  font-size: 0.65rem;
+  color: var(--gray-400);
+}
+
+.drawer-section-content {
+  padding: 0 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-empty-section {
+  padding: 12px 0;
+  color: var(--gray-400);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Drawer readonly fields */
+.drawer-field-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawer-field-label {
+  font-size: 0.7rem;
+  color: var(--gray-500);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.drawer-field-value {
+  font-size: 0.85rem;
+  color: var(--gray-800);
+  word-break: break-all;
+}
+
+.drawer-field-value a {
+  color: var(--primary-600);
+  text-decoration: none;
+}
+.drawer-field-value a:hover { text-decoration: underline; }
+
+.drawer-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.drawer-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  font-size: 0.72rem;
+}
+
+/* Editable Field */
+.editable-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editable-field-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editable-field-label {
+  font-size: 0.7rem;
+  color: var(--gray-500);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.editable-field-overridden {
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--warning-light);
+  color: #92400e;
+  font-weight: 500;
+}
+
+.editable-field-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--gray-800);
+  min-height: 32px;
+}
+.editable-field-display:hover { background: var(--gray-50); }
+
+.editable-field-pencil {
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.editable-field-display:hover .editable-field-pencil { opacity: 1; }
+
+.editable-field-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editable-field-input {
+  padding: 6px 10px;
+  border: 1px solid var(--primary-500);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  resize: vertical;
+}
+.editable-field-input:focus {
+  box-shadow: 0 0 0 2px var(--primary-50);
+}
+
+.editable-field-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-inline-save {
+  padding: 3px 12px;
+  border: none;
+  border-radius: 4px;
+  background: var(--primary-600);
+  color: white;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.btn-inline-save:hover { background: var(--primary-500); }
+
+.btn-inline-cancel {
+  padding: 3px 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  background: white;
+  color: var(--gray-600);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.btn-inline-cancel:hover { background: var(--gray-50); }
+
+.editable-field-raw {
+  font-size: 0.68rem;
+  color: var(--gray-400);
+  padding-left: 8px;
+  font-style: italic;
+}
+
+/* Edit History */
+.edit-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-history-entry {
+  padding: 8px 10px;
+  background: var(--gray-50);
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-500);
+}
+
+.edit-history-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.edit-history-field {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.edit-history-time {
+  font-size: 0.68rem;
+  color: var(--gray-400);
+}
+
+.edit-history-values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.edit-history-old {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.edit-history-arrow {
+  color: var(--gray-400);
+  font-size: 0.7rem;
+}
+
+.edit-history-new {
+  color: var(--success-dark);
+  font-weight: 500;
+}
+
+.text-sm { font-size: 0.82rem; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .drawer-panel { width: 100vw; max-width: 100vw; }
+}
