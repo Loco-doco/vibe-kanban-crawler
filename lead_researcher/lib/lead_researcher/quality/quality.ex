@@ -9,11 +9,11 @@ defmodule LeadResearcher.Quality do
     # reviewable = all leads (crawler only emits validated leads)
     reviewable = total
 
-    contact_present = Enum.count(leads, &has_email?/1)
+    contact_present = Enum.count(leads, &has_effective_email?/1)
     valid_email = Enum.count(leads, &(&1.email_status == "valid_syntax"))
     invalid_email = Enum.count(leads, &(&1.email_status == "invalid_syntax"))
     user_corrected = Enum.count(leads, &(&1.email_status == "user_corrected"))
-    audience_present = Enum.count(leads, &(not is_nil(&1.subscriber_count)))
+    audience_present = Enum.count(leads, &has_effective_audience?/1)
     enriched = Enum.count(leads, &(&1.enrichment_status == "completed"))
 
     contact_coverage = safe_rate(contact_present, reviewable)
@@ -57,9 +57,19 @@ defmodule LeadResearcher.Quality do
   defp suggest_supplement("low_audience_coverage"), do: "audience_supplement"
   defp suggest_supplement(_), do: nil
 
-  defp has_email?(lead) do
-    not is_nil(lead.email) and lead.email != ""
+  # effective email = contact_email (user override) || email (raw crawler)
+  defp has_effective_email?(lead) do
+    has_value?(lead.contact_email) or has_value?(lead.email)
   end
+
+  # effective audience = audience_size_override || subscriber_count
+  defp has_effective_audience?(lead) do
+    not is_nil(lead.audience_size_override) or not is_nil(lead.subscriber_count)
+  end
+
+  defp has_value?(nil), do: false
+  defp has_value?(""), do: false
+  defp has_value?(_), do: true
 
   defp safe_rate(_numerator, 0), do: 0.0
   defp safe_rate(numerator, denominator), do: Float.round(numerator / denominator, 4)

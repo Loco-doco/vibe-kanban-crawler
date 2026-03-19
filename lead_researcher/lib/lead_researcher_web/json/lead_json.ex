@@ -92,9 +92,9 @@ defmodule LeadResearcherWeb.LeadJSON do
 
     formatted =
       cond do
-        count >= 1_000_000 -> "#{Float.round(count / 1_000_000, 1)}백만"
-        count >= 10_000 -> "#{Float.round(count / 10_000, 1)}만"
-        count >= 1_000 -> "#{Float.round(count / 1_000, 1)}천"
+        count >= 1_000_000 -> "#{format_number(count / 1_000_000)}백만"
+        count >= 10_000 -> "#{format_number(count / 10_000)}만"
+        count >= 1_000 -> "#{format_number(count / 1_000)}천"
         true -> "#{count}"
       end
 
@@ -110,6 +110,16 @@ defmodule LeadResearcherWeb.LeadJSON do
       not is_nil(lead.subscriber_count) -> "collected"
       lead.platform in ["youtube", "instagram"] -> "not_collected"
       true -> "not_applicable"
+    end
+  end
+
+  # Format number: remove trailing .0 (e.g., 5.0 → "5", 1.2 → "1.2")
+  defp format_number(n) do
+    rounded = Float.round(n / 1, 1)
+    if rounded == Float.round(rounded, 0) do
+      rounded |> round() |> Integer.to_string()
+    else
+      Float.to_string(rounded)
     end
   end
 

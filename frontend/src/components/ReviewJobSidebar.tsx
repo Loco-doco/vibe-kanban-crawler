@@ -10,11 +10,18 @@ interface Props {
 export default function ReviewJobSidebar({ jobs, selectedJobId, onSelect }: Props) {
   // Group: parent jobs first, then their supplements underneath
   const parentJobs = jobs.filter(j => !j.parent_job_id)
+  const parentIds = new Set(parentJobs.map(j => j.id))
   const supplementMap = new Map<number, Job[]>()
+  const orphanedSupplements: Job[] = []
+
   jobs.filter(j => j.parent_job_id).forEach(j => {
-    const list = supplementMap.get(j.parent_job_id!) || []
-    list.push(j)
-    supplementMap.set(j.parent_job_id!, list)
+    if (parentIds.has(j.parent_job_id!)) {
+      const list = supplementMap.get(j.parent_job_id!) || []
+      list.push(j)
+      supplementMap.set(j.parent_job_id!, list)
+    } else {
+      orphanedSupplements.push(j)
+    }
   })
 
   return (
@@ -64,6 +71,27 @@ export default function ReviewJobSidebar({ jobs, selectedJobId, onSelect }: Prop
               </button>
             ))}
           </div>
+        ))}
+        {/* Orphaned supplement jobs (parent not in finished list) */}
+        {orphanedSupplements.map(sub => (
+          <button
+            key={sub.id}
+            className={`review-sidebar-item supplement${selectedJobId === sub.id ? ' active' : ''}`}
+            onClick={() => onSelect(sub.id)}
+          >
+            <div className="review-sidebar-item-title">
+              <span className="supplement-badge">보완</span>
+              {sub.label || `보완 #${sub.id}`}
+            </div>
+            <div className="review-sidebar-item-meta">
+              <span className={`review-sidebar-status ${sub.status}`}>
+                {STATUS_LABELS[sub.status] || sub.status}
+              </span>
+              <span className="review-sidebar-item-count">
+                {sub.total_leads_found}건
+              </span>
+            </div>
+          </button>
         ))}
         {jobs.length === 0 && (
           <div className="review-sidebar-empty">완료된 탐색이 없습니다</div>

@@ -20,7 +20,7 @@ const FINISHED_STATUSES = ['completed', 'completed_low_yield', 'failed', 'cancel
 export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId ?? null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
   const [emailStatusFilter, setEmailStatusFilter] = useState('')
   const [reviewStatusFilter, setReviewStatusFilter] = useState('')
@@ -68,10 +68,18 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     },
   })
 
+  // Derive drawer lead from fresh query data (not stale snapshot)
+  const drawerLead = drawerLeadId && leads ? leads.find(l => l.id === drawerLeadId) ?? null : null
+
   const handleSelectJob = useCallback((jobId: number) => {
     setSelectedJobId(jobId)
     setSelectedLeadIds(new Set())
-    setSelectedLead(null)
+    setDrawerLeadId(null)
+    setSearchText('')
+    setEmailStatusFilter('')
+    setReviewStatusFilter('')
+    setEnrichmentStatusFilter('')
+    setAudienceTierFilter('')
   }, [])
 
   const handleToggleSelect = useCallback((id: number) => {
@@ -97,16 +105,17 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   }, [selectedLeadIds, bulkMutation])
 
   const handleRowClick = useCallback((lead: Lead) => {
-    setSelectedLead(lead)
+    setDrawerLeadId(lead.id)
   }, [])
 
   const handleCloseDrawer = useCallback(() => {
-    setSelectedLead(null)
+    setDrawerLeadId(null)
   }, [])
 
   const handleLeadUpdated = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
+    queryClient.invalidateQueries({ queryKey: ['edit-history'] })
   }, [queryClient])
 
   const handleSupplementarySearch = useCallback((type: string) => {
@@ -225,9 +234,9 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       </div>
 
       {/* Lead Detail Drawer */}
-      {selectedLead && (
+      {drawerLead && (
         <LeadDetailDrawer
-          lead={selectedLead}
+          lead={drawerLead}
           onClose={handleCloseDrawer}
           onUpdated={handleLeadUpdated}
         />

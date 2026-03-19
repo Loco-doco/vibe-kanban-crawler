@@ -20,6 +20,9 @@ const SUPPLEMENT_CTA: Record<string, string> = {
 }
 
 export default function QualityBanner({ quality, onSupplementarySearch }: Props) {
+  // Don't show banner when quality is healthy (no action needed)
+  if (quality.judgment === 'healthy') return null
+
   const style = JUDGMENT_STYLE[quality.judgment]
   const label = QUALITY_JUDGMENT_LABELS[quality.judgment]
 

@@ -44,9 +44,12 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
   })
 
   const handleFieldSave = (field: string, value: string) => {
-    const payload: Record<string, string | number | null> = { [field]: value }
+    const payload: Record<string, string | number | null> = {}
     if (field === 'audience_size_override') {
       payload[field] = value ? parseInt(value, 10) : null
+    } else {
+      // Send null instead of empty string so effective_* fallback works
+      payload[field] = value.trim() || null
     }
     updateMutation.mutate(payload as Partial<Lead>)
   }

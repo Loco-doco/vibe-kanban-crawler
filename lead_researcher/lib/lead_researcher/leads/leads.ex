@@ -61,17 +61,39 @@ defmodule LeadResearcher.Leads do
     if changes == [] do
       {:ok, lead}
     else
-      # Auto-set email_status when contact_email is edited
-      final_attrs =
-        if Map.has_key?(attrs, :contact_email) do
-          Map.put(attrs, :email_status, "user_corrected")
+      change_fields = Enum.map(changes, fn {field, _} -> field end)
+
+      # Auto-set email_status when contact_email actually changed
+      auto_changes =
+        if :contact_email in change_fields do
+          old_email_status = lead.email_status
+          [{:email_status, {old_email_status, "user_corrected"}}]
         else
-          attrs
+          []
         end
 
-      case update_lead(lead, final_attrs) do
+      # Auto-compute audience_tier_override when audience_size_override changed
+      auto_changes =
+        if :audience_size_override in change_fields do
+          {_, {_old_size, new_size}} = Enum.find(changes, fn {f, _} -> f == :audience_size_override end)
+          new_tier = Lead.compute_audience_tier(new_size)
+          old_tier = lead.audience_tier_override
+          auto_changes ++ [{:audience_tier_override, {old_tier, new_tier}}]
+        else
+          auto_changes
+        end
+
+      # Build final attrs with auto-computed fields
+      auto_attrs =
+        Enum.reduce(auto_changes, attrs, fn {field, {_old, new}}, acc ->
+          Map.put(acc, field, new)
+        end)
+
+      case update_lead(lead, auto_attrs) do
         {:ok, updated} ->
-          EditHistories.log_changes(lead.id, changes, edited_by)
+          # Log both user changes and auto-computed changes
+          all_changes = changes ++ auto_changes
+          EditHistories.log_changes(lead.id, all_changes, edited_by)
           {:ok, Repo.preload(updated, :enrichment)}
 
         error ->
@@ -175,7 +197,7 @@ defmodule LeadResearcher.Leads do
   defp maybe_filter_enrichment_status(query, _), do: query
 
   defp maybe_filter_audience_tier(query, %{"audience_tier" => tier}) when is_binary(tier) do
-    where(query, [l], l.audience_tier == ^tier)
+    where(query, [l], coalesce(l.audience_tier_override, l.audience_tier) == ^tier)
   end
 
   defp maybe_filter_audience_tier(query, _), do: query
