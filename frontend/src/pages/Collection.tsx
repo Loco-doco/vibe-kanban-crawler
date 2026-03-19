@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getJobs } from '../api/jobs'
 import CollectionSetupForm from '../components/CollectionSetupForm'
 import JobMonitor from '../components/JobMonitor'
-import CollectionResults from '../components/CollectionResults'
+import ReviewWorkspace from '../components/ReviewWorkspace'
 import EnrichmentImport from '../components/EnrichmentImport'
 import type { Job } from '../types'
 
@@ -70,7 +70,7 @@ export default function Collection() {
           <JobMonitor onViewResults={handleViewResults} />
         )}
         {activeTab === 'results' && (
-          <CollectionResults initialJobId={resultJobId} />
+          <ReviewWorkspace initialJobId={resultJobId} />
         )}
         {activeTab === 'operator' && (
           <EnrichmentImport />
