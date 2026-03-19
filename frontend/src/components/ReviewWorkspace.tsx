@@ -8,7 +8,8 @@ import QualityBanner from './QualityBanner'
 import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
 import LeadDetailDrawer from './LeadDetailDrawer'
-import type { Job, Lead, ReviewStatus } from '../types'
+import SupplementarySearchModal from './SupplementarySearchModal'
+import type { Job, Lead, ReviewStatus, SupplementaryType } from '../types'
 
 interface Props {
   initialJobId?: number | null
@@ -25,6 +26,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   const [reviewStatusFilter, setReviewStatusFilter] = useState('')
   const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('')
   const [audienceTierFilter, setAudienceTierFilter] = useState('')
+  const [supplementModalType, setSupplementModalType] = useState<SupplementaryType | null>(null)
   const queryClient = useQueryClient()
 
   // Jobs
@@ -107,8 +109,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     queryClient.invalidateQueries({ queryKey: ['quality'] })
   }, [queryClient])
 
-  const handleSupplementarySearch = useCallback((_type: string) => {
-    // SupplementarySearchModal will be added in Issue 5-5
+  const handleSupplementarySearch = useCallback((type: string) => {
+    setSupplementModalType(type as SupplementaryType)
   }, [])
 
   return (
@@ -228,6 +230,15 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
           lead={selectedLead}
           onClose={handleCloseDrawer}
           onUpdated={handleLeadUpdated}
+        />
+      )}
+
+      {/* Supplementary Search Modal */}
+      {supplementModalType && activeJobId && (
+        <SupplementarySearchModal
+          jobId={activeJobId}
+          suggestedType={supplementModalType}
+          onClose={() => setSupplementModalType(null)}
         />
       )}
     </div>

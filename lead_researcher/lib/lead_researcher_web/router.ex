@@ -12,6 +12,7 @@ defmodule LeadResearcherWeb.Router do
 
     resources "/jobs", JobController, only: [:index, :create, :show]
     post "/jobs/:id/cancel", JobController, :cancel
+    post "/jobs/:id/supplement", JobController, :supplement
     post "/parse-prompt", JobController, :parse_prompt
 
     get "/leads/export/csv", LeadController, :export_csv

@@ -1,5 +1,5 @@
 import api from './client'
-import type { Job, CreateJobPayload } from '../types'
+import type { Job, CreateJobPayload, SupplementaryType } from '../types'
 
 export async function getJobs(): Promise<Job[]> {
   const { data } = await api.get<{ data: Job[] }>('/jobs')
@@ -18,6 +18,13 @@ export async function createJob(payload: CreateJobPayload): Promise<Job> {
 
 export async function cancelJob(id: number): Promise<Job> {
   const { data } = await api.post<{ data: Job }>(`/jobs/${id}/cancel`)
+  return data.data
+}
+
+export async function createSupplementaryJob(jobId: number, supplementaryType: SupplementaryType): Promise<Job> {
+  const { data } = await api.post<{ data: Job }>(`/jobs/${jobId}/supplement`, {
+    supplementary_type: supplementaryType,
+  })
   return data.data
 }
 

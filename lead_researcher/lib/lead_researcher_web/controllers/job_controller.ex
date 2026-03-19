@@ -40,6 +40,22 @@ defmodule LeadResearcherWeb.JobController do
     end
   end
 
+  def supplement(conn, %{"id" => id, "supplementary_type" => sup_type}) do
+    case Jobs.create_supplementary_job(String.to_integer(id), sup_type) do
+      {:ok, job} ->
+        LeadResearcher.Jobs.JobQueue.enqueue(job.id)
+
+        conn
+        |> put_status(:created)
+        |> render(:show, job: job)
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{errors: format_errors(changeset)})
+    end
+  end
+
   def cancel(conn, %{"id" => id}) do
     LeadResearcher.Jobs.JobQueue.cancel(String.to_integer(id))
 
