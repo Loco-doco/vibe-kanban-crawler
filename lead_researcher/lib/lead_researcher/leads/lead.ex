@@ -23,6 +23,7 @@ defmodule LeadResearcher.Leads.Lead do
     field :master_sync_status, :string, default: "not_synced"
 
     belongs_to :job, LeadResearcher.Jobs.Job
+    has_one :enrichment, LeadResearcher.Enrichments.LeadEnrichment
 
     timestamps()
   end
