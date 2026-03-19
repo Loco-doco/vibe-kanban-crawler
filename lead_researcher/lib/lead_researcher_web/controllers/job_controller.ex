@@ -56,6 +56,26 @@ defmodule LeadResearcherWeb.JobController do
     end
   end
 
+  def enrich_subscribers(conn, %{"id" => id}) do
+    job_id = String.to_integer(id)
+
+    Task.start(fn ->
+      LeadResearcher.Crawler.Runner.run_enrich_subscribers(job_id)
+    end)
+
+    json(conn, %{status: "started", job_id: job_id})
+  end
+
+  def enrich_channels(conn, %{"id" => id}) do
+    job_id = String.to_integer(id)
+
+    Task.start(fn ->
+      LeadResearcher.Crawler.Runner.run_enrich_channels(job_id)
+    end)
+
+    json(conn, %{status: "started", job_id: job_id})
+  end
+
   def cancel(conn, %{"id" => id}) do
     LeadResearcher.Jobs.JobQueue.cancel(String.to_integer(id))
 

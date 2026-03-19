@@ -24,6 +24,14 @@ defmodule LeadResearcher.Enrichments.LeadEnrichment do
     field :monetization_signals, :string
     field :contact_channels, :string
     field :enrichment_confidence, :float
+    field :profile_tags, :string
+
+    # Evidence metadata (5B-4)
+    field :evidence_url, :string
+    field :extraction_method, :string
+    field :evidence_fields, :string
+    field :extracted_at, :utc_datetime
+    field :coverage_score, :float
 
     timestamps()
   end
@@ -34,7 +42,8 @@ defmodule LeadResearcher.Enrichments.LeadEnrichment do
     :trend_summary, :suggested_email, :operator_notes,
     :profile_summary, :recent_activity_summary, :business_type,
     :secondary_platforms, :monetization_signals, :contact_channels,
-    :enrichment_confidence
+    :enrichment_confidence, :profile_tags,
+    :evidence_url, :extraction_method, :evidence_fields, :extracted_at, :coverage_score
   ]
 
   def changeset(enrichment, attrs) do

@@ -27,6 +27,8 @@ defmodule LeadResearcherWeb.LeadJSON do
       source_type: lead.source_type,
       source_url: lead.source_url,
       discovery_keyword: lead.discovery_keyword,
+      discovery_keywords: safe_decode_json(lead.discovery_keywords, []),
+      normalized_tags: safe_decode_json(lead.normalized_tags, []),
       review_status: lead.review_status,
       master_sync_status: lead.master_sync_status,
       job_id: lead.job_id,
@@ -42,6 +44,8 @@ defmodule LeadResearcherWeb.LeadJSON do
       audience_size_override: lead.audience_size_override,
       audience_tier_override: lead.audience_tier_override,
       enrichment_status: lead.enrichment_status || "not_started",
+      contact_readiness: lead.contact_readiness || "needs_verification",
+      suspect_reason: lead.suspect_reason,
       # Computed effective values (user override > raw)
       effective_name: lead.display_name || lead.channel_name,
       effective_email: lead.contact_email || lead.email,
@@ -66,11 +70,18 @@ defmodule LeadResearcherWeb.LeadJSON do
             monetization_signals: safe_decode_json(e.monetization_signals, []),
             contact_channels: safe_decode_json(e.contact_channels, []),
             enrichment_confidence: e.enrichment_confidence,
+            profile_tags: safe_decode_json(e.profile_tags, []),
             suggested_email: e.suggested_email,
             operator_notes: e.operator_notes,
             source: e.source,
             operator_id: e.operator_id,
-            enriched_at: e.updated_at
+            enriched_at: e.updated_at,
+            # Evidence metadata (5B-4)
+            evidence_url: e.evidence_url,
+            extraction_method: e.extraction_method,
+            evidence_fields: safe_decode_json(e.evidence_fields, nil),
+            extracted_at: e.extracted_at,
+            coverage_score: e.coverage_score
           }
 
         _ ->

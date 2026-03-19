@@ -12,6 +12,7 @@ defmodule LeadResearcher.Leads do
     |> maybe_filter_min_confidence(params)
     |> maybe_filter_has_email(params)
     |> maybe_filter_email_status(params)
+    |> maybe_filter_contact_readiness(params)
     |> maybe_filter_review_status(params)
     |> maybe_filter_enrichment_status(params)
     |> maybe_filter_audience_tier(params)
@@ -63,11 +64,16 @@ defmodule LeadResearcher.Leads do
     else
       change_fields = Enum.map(changes, fn {field, _} -> field end)
 
-      # Auto-set email_status when contact_email actually changed
+      # Auto-set email_status + contact_readiness when contact_email actually changed
       auto_changes =
         if :contact_email in change_fields do
           old_email_status = lead.email_status
-          [{:email_status, {old_email_status, "user_corrected"}}]
+          old_readiness = lead.contact_readiness
+          [
+            {:email_status, {old_email_status, "user_corrected"}},
+            {:contact_readiness, {old_readiness, "user_confirmed"}},
+            {:suspect_reason, {lead.suspect_reason, nil}}
+          ]
         else
           []
         end
@@ -100,6 +106,63 @@ defmodule LeadResearcher.Leads do
           error
       end
     end
+  end
+
+  @doc "List leads for a job that have a channel_url but no subscriber_count"
+  def list_leads_missing_subscribers(job_id) do
+    from(l in Lead,
+      where: l.job_id == ^job_id,
+      where: l.platform == "youtube",
+      where: is_nil(l.subscriber_count),
+      where: not is_nil(l.channel_url) and l.channel_url != "",
+      select: %{id: l.id, channel_url: l.channel_url}
+    )
+    |> Repo.all()
+  end
+
+  @doc "List leads for a job that need enrichment (have channel_url, enrichment not yet done)"
+  def list_leads_for_enrichment(job_id) do
+    from(l in Lead,
+      where: l.job_id == ^job_id,
+      where: l.enrichment_status in ["not_started", "failed"],
+      where: not is_nil(l.channel_url) and l.channel_url != "",
+      select: %{id: l.id, channel_url: l.channel_url}
+    )
+    |> Repo.all()
+  end
+
+  @doc "Update subscriber_count and recalculate audience_tier for a lead"
+  def backfill_subscriber_count(lead_id, subscriber_count) do
+    lead = Repo.get!(Lead, lead_id)
+    tier = Lead.compute_audience_tier(subscriber_count)
+
+    lead
+    |> Lead.changeset(%{
+      subscriber_count: subscriber_count,
+      audience_tier: tier
+    })
+    |> Repo.update()
+  end
+
+  @doc "Run auto-review classification on all pending leads for a job"
+  def auto_review_job(job_id) do
+    leads =
+      from(l in Lead,
+        where: l.job_id == ^job_id,
+        where: l.review_status == "pending"
+      )
+      |> Repo.all()
+
+    Enum.each(leads, fn lead ->
+      new_status = LeadResearcher.AutoReviewer.classify(lead)
+      if new_status != lead.review_status do
+        lead
+        |> Lead.changeset(%{review_status: new_status})
+        |> Repo.update()
+      end
+    end)
+
+    length(leads)
   end
 
   @doc "Bulk update review_status for multiple leads"
@@ -183,6 +246,12 @@ defmodule LeadResearcher.Leads do
   end
 
   defp maybe_filter_email_status(query, _), do: query
+
+  defp maybe_filter_contact_readiness(query, %{"contact_readiness" => cr}) when is_binary(cr) do
+    where(query, [l], l.contact_readiness == ^cr)
+  end
+
+  defp maybe_filter_contact_readiness(query, _), do: query
 
   defp maybe_filter_review_status(query, %{"review_status" => rs}) when is_binary(rs) do
     where(query, [l], l.review_status == ^rs)

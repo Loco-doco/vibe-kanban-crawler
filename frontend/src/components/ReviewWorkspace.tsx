@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getJobs } from '../api/jobs'
+import { getJobs, enrichSubscribers, enrichChannels } from '../api/jobs'
 import { getLeads, getQuality, bulkReview } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
@@ -22,7 +22,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
-  const [emailStatusFilter, setEmailStatusFilter] = useState('')
+  const [contactReadinessFilter, setContactReadinessFilter] = useState('')
   const [reviewStatusFilter, setReviewStatusFilter] = useState('')
   const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('')
   const [audienceTierFilter, setAudienceTierFilter] = useState('')
@@ -38,12 +38,12 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
 
   // Leads
   const { data: leads, isLoading: leadsLoading } = useQuery({
-    queryKey: ['leads', { job_id: activeJobId, search: searchText, email_status: emailStatusFilter, review_status: reviewStatusFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
+    queryKey: ['leads', { job_id: activeJobId, search: searchText, contact_readiness: contactReadinessFilter, review_status: reviewStatusFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
     queryFn: () => getLeads({
       job_id: activeJobId!,
       limit: 500,
       ...(searchText ? { search: searchText } : {}),
-      ...(emailStatusFilter ? { email_status: emailStatusFilter } : {}),
+      ...(contactReadinessFilter ? { contact_readiness: contactReadinessFilter } : {}),
       ...(reviewStatusFilter ? { review_status: reviewStatusFilter } : {}),
       ...(enrichmentStatusFilter ? { enrichment_status: enrichmentStatusFilter } : {}),
       ...(audienceTierFilter ? { audience_tier: audienceTierFilter } : {}),
@@ -76,7 +76,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     setSelectedLeadIds(new Set())
     setDrawerLeadId(null)
     setSearchText('')
-    setEmailStatusFilter('')
+    setContactReadinessFilter('')
     setReviewStatusFilter('')
     setEnrichmentStatusFilter('')
     setAudienceTierFilter('')
@@ -122,6 +122,30 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     setSupplementModalType(type as SupplementaryType)
   }, [])
 
+  const handleEnrichSubscribers = useCallback(async () => {
+    if (!activeJobId) return
+    await enrichSubscribers(activeJobId)
+  }, [activeJobId])
+
+  const handleEnrichChannels = useCallback(async () => {
+    if (!activeJobId) return
+    await enrichChannels(activeJobId)
+  }, [activeJobId])
+
+  const handleKPIFilterClick = useCallback((filter: string) => {
+    if (filter === 'needs_review') {
+      setReviewStatusFilter('needs_review')
+    } else if (filter === 'excluded') {
+      setReviewStatusFilter('auto_rejected')
+    } else if (filter === 'contactable') {
+      setContactReadinessFilter('contactable')
+      setReviewStatusFilter('')
+    } else if (filter === 'needs_correction') {
+      setReviewStatusFilter('')
+      setContactReadinessFilter('')
+    }
+  }, [])
+
   return (
     <div className="review-workspace">
       <ReviewJobSidebar
@@ -140,15 +164,38 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
         ) : (
           <>
             {/* KPI Cards */}
-            {quality && <ReviewKPICards quality={quality} />}
+            {quality && <ReviewKPICards quality={quality} onFilterClick={handleKPIFilterClick} />}
 
             {/* Quality Banner */}
             {quality && (
               <QualityBanner
                 quality={quality}
                 onSupplementarySearch={handleSupplementarySearch}
+                onEnrichSubscribers={handleEnrichSubscribers}
+                onEnrichChannels={handleEnrichChannels}
               />
             )}
+
+            {/* Review Queue Tabs */}
+            <div className="review-queue-tabs">
+              {[
+                { value: '', label: '전체' },
+                { value: 'needs_review', label: '검토 필요' },
+                { value: 'auto_approved', label: '자동 승인' },
+                { value: 'auto_rejected', label: '자동 제외' },
+                { value: 'approved', label: '승인' },
+                { value: 'rejected', label: '제외' },
+                { value: 'held', label: '보류' },
+              ].map(tab => (
+                <button
+                  key={tab.value}
+                  className={`queue-tab${reviewStatusFilter === tab.value ? ' active' : ''}`}
+                  onClick={() => setReviewStatusFilter(tab.value)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
             {/* Filter Bar */}
             <div className="review-filter-bar">
@@ -161,25 +208,15 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               />
               <select
                 className="review-filter-select"
-                value={emailStatusFilter}
-                onChange={e => setEmailStatusFilter(e.target.value)}
+                value={contactReadinessFilter}
+                onChange={e => setContactReadinessFilter(e.target.value)}
               >
-                <option value="">이메일 상태</option>
-                <option value="valid_syntax">유효</option>
-                <option value="invalid_syntax">무효</option>
-                <option value="missing">없음</option>
-                <option value="user_corrected">수정됨</option>
-              </select>
-              <select
-                className="review-filter-select"
-                value={reviewStatusFilter}
-                onChange={e => setReviewStatusFilter(e.target.value)}
-              >
-                <option value="">리뷰 상태</option>
-                <option value="pending">검토 대기</option>
-                <option value="approved">승인</option>
-                <option value="rejected">제외</option>
-                <option value="held">보류</option>
+                <option value="">연락 가능성</option>
+                <option value="contactable">연락 가능</option>
+                <option value="platform_suspect">플랫폼 메일 의심</option>
+                <option value="no_email">이메일 없음</option>
+                <option value="needs_verification">검증 필요</option>
+                <option value="user_confirmed">사용자 확인</option>
               </select>
               <select
                 className="review-filter-select"
@@ -196,7 +233,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
                 value={audienceTierFilter}
                 onChange={e => setAudienceTierFilter(e.target.value)}
               >
-                <option value="">영향력 등급</option>
+                <option value="">영향력 규모</option>
                 <option value="nano">Nano</option>
                 <option value="micro">Micro</option>
                 <option value="mid">Mid</option>

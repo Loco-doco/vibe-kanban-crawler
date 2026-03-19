@@ -2302,6 +2302,23 @@ body {
 .email-status-badge.user_corrected { background: var(--info); color: white; }
 .email-status-badge.unverified { background: var(--warning-light); color: #92400e; }
 
+/* Contact Readiness Badge (UX-1) */
+.contact-readiness-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.contact-readiness-badge.contactable { background: var(--success-light); color: var(--success-dark); }
+.contact-readiness-badge.no_email { background: var(--gray-100); color: var(--gray-400); }
+.contact-readiness-badge.platform_suspect { background: #fef3c7; color: #92400e; }
+.contact-readiness-badge.needs_verification { background: #dbeafe; color: #1d4ed8; }
+.contact-readiness-badge.user_confirmed { background: var(--info); color: white; }
+
+.suspect-reason { color: #92400e; font-size: 0.75rem; font-style: italic; }
+
 /* Audience display */
 .audience-value { font-weight: 500; color: var(--gray-800); }
 .audience-status { font-size: 0.72rem; font-style: italic; }
@@ -2333,6 +2350,9 @@ body {
 }
 
 .review-badge.pending { background: var(--gray-100); color: var(--gray-500); }
+.review-badge.auto_approved { background: #ecfdf5; color: #047857; border: 1px dashed #a7f3d0; }
+.review-badge.auto_rejected { background: #fef2f2; color: #b91c1c; border: 1px dashed #fecaca; }
+.review-badge.needs_review { background: #fef3c7; color: #92400e; }
 .review-badge.approved { background: var(--success-light); color: var(--success-dark); }
 .review-badge.rejected { background: var(--danger-light); color: var(--danger); }
 .review-badge.held { background: var(--warning-light); color: #92400e; }
@@ -2806,4 +2826,277 @@ body {
 
 .review-sidebar-item.supplement {
   padding-left: 28px;
+}
+
+/* ===== Tag Chips (UX-2) ===== */
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: var(--primary-50);
+  color: var(--primary-600);
+  white-space: nowrap;
+}
+
+.tag-chip.discovery {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.tag-chip.profile {
+  background: var(--purple-light);
+  color: #7c3aed;
+}
+
+.col-tags {
+  max-width: 180px;
+}
+
+/* ===== Review Queue Tabs (UX-4) ===== */
+.review-queue-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.queue-tab {
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.queue-tab:hover {
+  color: var(--gray-700);
+}
+
+.queue-tab.active {
+  color: var(--primary-600);
+  border-bottom-color: var(--primary-600);
+}
+
+/* ===== Judgment Panel (UX-3) ===== */
+.judgment-panel {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.judgment-action {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.judgment-action.action-high {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.judgment-action.action-medium {
+  background: var(--warning-light);
+  color: #92400e;
+}
+
+.judgment-action.action-low {
+  background: var(--success-light);
+  color: var(--success-dark);
+}
+
+.judgment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.judgment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--gray-700);
+  line-height: 1.5;
+}
+
+.judgment-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+
+.judgment-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.judgment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.judgment-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.judgment-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.judgment-btn.approve {
+  color: var(--success-dark);
+  border-color: var(--success);
+}
+.judgment-btn.approve:hover:not(:disabled) {
+  background: var(--success-light);
+}
+
+.judgment-btn.hold {
+  color: #92400e;
+  border-color: var(--warning);
+}
+.judgment-btn.hold:hover:not(:disabled) {
+  background: var(--warning-light);
+}
+
+.judgment-btn.reject {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.judgment-btn.reject:hover:not(:disabled) {
+  background: var(--danger-light);
+}
+
+/* ===== Action Badges (UX-3 Table) ===== */
+.action-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.action-badge.high {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.action-badge.medium {
+  background: var(--warning-light);
+  color: #92400e;
+}
+
+.action-badge.low {
+  background: var(--success-light);
+  color: var(--success-dark);
+}
+
+/* ===== Table: Platform/Audience merged column (UX-3) ===== */
+.col-platform-audience {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.audience-value-inline {
+  font-size: 0.8rem;
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+.tier-badge-sm {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.tier-badge-sm.nano { background: #f3f4f6; color: #6b7280; }
+.tier-badge-sm.micro { background: #dbeafe; color: #1d4ed8; }
+.tier-badge-sm.mid { background: #d1fae5; color: #065f46; }
+.tier-badge-sm.macro { background: #fef3c7; color: #92400e; }
+.tier-badge-sm.mega { background: #ede9fe; color: #7c3aed; }
+
+/* ===== Review KPI Section (UX-3 / P3) ===== */
+.review-kpi-section {
+  padding: 12px 16px;
+}
+
+.review-kpi-cards {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.kpi-card {
+  flex: 1;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.kpi-card:hover {
+  border-color: var(--primary-500);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.15);
+}
+
+.kpi-card-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1.2;
+}
+
+.kpi-card-label {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+
+.kpi-card.contactable .kpi-card-value { color: var(--success-dark); }
+.kpi-card.needs-review .kpi-card-value { color: var(--warning); }
+.kpi-card.needs-correction .kpi-card-value { color: var(--info); }
+.kpi-card.excluded .kpi-card-value { color: var(--gray-400); }
+
+.kpi-sub-metrics {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 4px 0;
 }

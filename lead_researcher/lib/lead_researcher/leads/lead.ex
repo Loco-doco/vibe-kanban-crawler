@@ -20,6 +20,8 @@ defmodule LeadResearcher.Leads.Lead do
     field :source_type, :string
     field :source_url, :string
     field :discovery_keyword, :string
+    field :discovery_keywords, :string
+    field :normalized_tags, :string
     field :review_status, :string, default: "pending"
     field :master_sync_status, :string, default: "not_synced"
 
@@ -37,6 +39,10 @@ defmodule LeadResearcher.Leads.Lead do
     field :audience_size_override, :integer
     field :audience_tier_override, :string
 
+    # Contact readiness (UX-1)
+    field :contact_readiness, :string, default: "needs_verification"
+    field :suspect_reason, :string
+
     # Enrichment tracking
     field :enrichment_status, :string, default: "not_started"
 
@@ -50,10 +56,11 @@ defmodule LeadResearcher.Leads.Lead do
     :email, :platform, :channel_name, :channel_url, :evidence_link,
     :confidence_score, :subscriber_count, :status, :last_contacted_at,
     :notes, :raw_data, :job_id, :email_verified,
-    :source_platform, :source_type, :source_url, :discovery_keyword,
+    :source_platform, :source_type, :source_url, :discovery_keyword, :discovery_keywords, :normalized_tags,
     :review_status, :master_sync_status,
     :email_status, :audience_metric_type, :audience_tier, :audience_source,
     :display_name, :contact_email, :audience_size_override, :audience_tier_override,
+    :contact_readiness, :suspect_reason,
     :enrichment_status
   ]
 
@@ -63,11 +70,12 @@ defmodule LeadResearcher.Leads.Lead do
     |> validate_required([:evidence_link, :job_id])
     |> validate_inclusion(:status, ~w(scraped verified contacted replied bounced manual_review))
     |> validate_inclusion(:platform, ~w(youtube instagram class101 liveklass web unknown))
-    |> validate_inclusion(:review_status, ~w(pending approved rejected held))
+    |> validate_inclusion(:review_status, ~w(pending auto_approved auto_rejected needs_review approved rejected held))
     |> validate_inclusion(:master_sync_status, ~w(not_synced ready conflict synced))
     |> validate_inclusion(:email_status, ~w(missing unverified valid_syntax invalid_syntax user_corrected))
     |> validate_inclusion(:audience_metric_type, ~w(subscriber follower member unknown))
     |> validate_inclusion(:enrichment_status, ~w(not_started completed low_confidence failed))
+    |> validate_inclusion(:contact_readiness, ~w(contactable no_email platform_suspect needs_verification user_confirmed))
     |> foreign_key_constraint(:job_id)
   end
 

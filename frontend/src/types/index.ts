@@ -1,11 +1,12 @@
 export type JobStatus = 'draft' | 'queued' | 'running' | 'partial_results' | 'completed' | 'completed_low_yield' | 'failed' | 'cancelled'
 
-export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'held'
+export type ReviewStatus = 'pending' | 'auto_approved' | 'auto_rejected' | 'needs_review' | 'approved' | 'rejected' | 'held'
 export type MasterSyncStatus = 'not_synced' | 'ready' | 'conflict' | 'synced'
 export type EmailStatus = 'missing' | 'unverified' | 'valid_syntax' | 'invalid_syntax' | 'user_corrected'
 export type AudienceMetricType = 'subscriber' | 'follower' | 'member' | 'unknown'
 export type AudienceTier = 'nano' | 'micro' | 'mid' | 'macro' | 'mega'
 export type AudienceDisplayStatus = 'collected' | 'not_collected' | 'not_applicable'
+export type ContactReadiness = 'contactable' | 'no_email' | 'platform_suspect' | 'needs_verification' | 'user_confirmed'
 export type EnrichmentStatus = 'not_started' | 'completed' | 'low_confidence' | 'failed'
 export type QualityJudgment = 'healthy' | 'low_email_coverage' | 'high_invalid_email_rate' | 'low_audience_coverage'
 export type SupplementaryType = 'email_supplement' | 'audience_supplement' | 'meta_supplement'
@@ -65,11 +66,18 @@ export interface LeadEnrichment {
   monetization_signals: string[]
   contact_channels: string[]
   enrichment_confidence: number | null
+  profile_tags: string[]
   suggested_email: string | null
   operator_notes: string | null
   source: 'operator' | 'system'
   operator_id: string | null
   enriched_at: string
+  // Evidence metadata (5B-4)
+  evidence_url: string | null
+  extraction_method: string | null
+  evidence_fields: Record<string, { method: string; confidence: number; fragment: string }> | null
+  extracted_at: string | null
+  coverage_score: number | null
 }
 
 export interface Lead {
@@ -90,6 +98,8 @@ export interface Lead {
   source_type: string | null
   source_url: string | null
   discovery_keyword: string | null
+  discovery_keywords: string[]
+  normalized_tags: string[]
   review_status: ReviewStatus
   master_sync_status: MasterSyncStatus
   // Phase 5 fields
@@ -102,6 +112,8 @@ export interface Lead {
   audience_size_override: number | null
   audience_tier_override: AudienceTier | null
   enrichment_status: EnrichmentStatus
+  contact_readiness: ContactReadiness
+  suspect_reason: string | null
   // Computed effective values
   effective_name: string | null
   effective_email: string | null
@@ -132,6 +144,12 @@ export interface QualityMetrics {
   enrichment_coverage_rate: number
   judgment: QualityJudgment
   suggested_supplement: SupplementaryType | null
+  contactable_leads: number
+  platform_suspect_leads: number
+  no_email_leads: number
+  needs_review_leads: number
+  needs_correction_leads: number
+  excluded_leads: number
 }
 
 export interface EditHistoryEntry {
@@ -227,6 +245,9 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
 
 export const REVIEW_STATUS_LABELS: Record<string, string> = {
   pending: '검토 대기',
+  auto_approved: '자동 승인',
+  auto_rejected: '자동 제외',
+  needs_review: '검토 필요',
   approved: '승인',
   rejected: '제외',
   held: '보류',
@@ -253,6 +274,34 @@ export const AUDIENCE_TIER_LABELS: Record<string, string> = {
   mid: 'Mid',
   macro: 'Macro',
   mega: 'Mega',
+}
+
+export const CONTACT_READINESS_LABELS: Record<string, string> = {
+  contactable: '연락 가능',
+  no_email: '이메일 없음',
+  platform_suspect: '플랫폼 메일 의심',
+  needs_verification: '검증 필요',
+  user_confirmed: '사용자 확인',
+}
+
+export const SUSPECT_REASON_LABELS: Record<string, string> = {
+  prefix_support: 'support@ 계열 공용 메일',
+  prefix_cs: 'cs@ 계열 공용 메일',
+  prefix_help: 'help@ 계열 공용 메일',
+  prefix_admin: 'admin@ 계열 공용 메일',
+  prefix_info: 'info@ 계열 공용 메일',
+  prefix_contact: 'contact@ 계열 공용 메일',
+  prefix_noreply: 'noreply@ 수신 불가 메일',
+  prefix_service: 'service@ 계열 공용 메일',
+  prefix_sales: 'sales@ 계열 공용 메일',
+  prefix_marketing: 'marketing@ 계열 공용 메일',
+  prefix_team: 'team@ 계열 공용 메일',
+  platform_domain_fanding_kr: '팬딩 플랫폼 도메인',
+  platform_domain_youtube_com: 'YouTube 도메인',
+  platform_domain_google_com: 'Google 도메인',
+  platform_domain_naver_com: 'Naver 도메인',
+  generic_footer_webmaster: 'webmaster 시스템 메일',
+  generic_footer_postmaster: 'postmaster 시스템 메일',
 }
 
 export const ENRICHMENT_STATUS_LABELS: Record<string, string> = {

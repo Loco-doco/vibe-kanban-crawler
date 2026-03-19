@@ -16,6 +16,7 @@ Supports two modes:
 import sys
 import json
 import os
+import time
 
 # Add crawler directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,8 @@ from scrapers.instagram import InstagramScraper
 from scrapers.generic import GenericScraper
 from scrapers.youtube_discovery import YouTubeDiscoveryScraper
 from utils.url_utils import classify_url, normalize_url
+from utils.youtube_parser import extract_subscriber_count
+from utils.http_client import fetch_with_retry
 
 
 def log(message):
@@ -276,6 +279,106 @@ def run_discovery_mode(config, crawler_config):
     return total_emitted
 
 
+def run_enrich_subscribers(config, crawler_config):
+    """
+    Backfill subscriber_count for existing leads.
+    Input: config.leads = [{"lead_id": 1, "channel_url": "https://..."}, ...]
+    Output: {"type": "subscriber_update", "lead_id": 1, "subscriber_count": 12000}
+    """
+    leads = config.get("leads", [])
+    log(f"Starting subscriber backfill for {len(leads)} leads")
+
+    updated = 0
+    failed = 0
+
+    for item in leads:
+        lead_id = item["lead_id"]
+        channel_url = item["channel_url"]
+
+        try:
+            html = fetch_with_retry(
+                channel_url.rstrip("/"),
+                crawler_config["max_retries"],
+                crawler_config["delay_ms"],
+            )
+            if html:
+                count = extract_subscriber_count(html)
+                if count is not None:
+                    print(
+                        json.dumps({
+                            "type": "subscriber_update",
+                            "lead_id": lead_id,
+                            "subscriber_count": count,
+                        }),
+                        flush=True,
+                    )
+                    updated += 1
+                else:
+                    log(f"No subscriber count found for lead {lead_id}")
+                    failed += 1
+            else:
+                log(f"Failed to fetch channel page for lead {lead_id}")
+                failed += 1
+        except Exception as e:
+            error(f"Error processing lead {lead_id}: {str(e)}")
+            failed += 1
+
+        # Rate limiting between requests
+        time.sleep(crawler_config["delay_ms"] / 1000)
+
+    emit_summary({
+        "termination_reason": "completed",
+        "total_processed": len(leads),
+        "updated": updated,
+        "failed": failed,
+    })
+
+    return updated
+
+
+def run_enrich_channels(config, crawler_config):
+    """
+    Enrich existing leads with channel page data.
+    Input: config.leads = [{"lead_id": 1, "channel_url": "https://..."}, ...]
+    Output: {"type": "enrichment", "lead_id": 1, "profile_summary": "...", ...}
+    """
+    from scrapers.channel_enricher import ChannelEnricher
+
+    leads = config.get("leads", [])
+    log(f"Starting channel enrichment for {len(leads)} leads")
+
+    enricher = ChannelEnricher(crawler_config)
+    enriched = 0
+    failed = 0
+
+    for item in leads:
+        lead_id = item["lead_id"]
+        channel_url = item["channel_url"]
+
+        try:
+            result = enricher.enrich(lead_id, channel_url)
+            if result:
+                print(json.dumps(result, ensure_ascii=False), flush=True)
+                enriched += 1
+            else:
+                log(f"No enrichment data for lead {lead_id}")
+                failed += 1
+        except Exception as e:
+            error(f"Error enriching lead {lead_id}: {str(e)}")
+            failed += 1
+
+        time.sleep(crawler_config["delay_ms"] / 1000)
+
+    emit_summary({
+        "termination_reason": "completed",
+        "total_processed": len(leads),
+        "enriched": enriched,
+        "failed": failed,
+    })
+
+    return enriched
+
+
 def main():
     config_line = sys.stdin.readline().strip()
     if not config_line:
@@ -298,6 +401,10 @@ def main():
 
     if mode == "discovery":
         total_emitted = run_discovery_mode(config, crawler_config)
+    elif mode == "enrich_subscribers":
+        total_emitted = run_enrich_subscribers(config, crawler_config)
+    elif mode == "enrich_channels":
+        total_emitted = run_enrich_channels(config, crawler_config)
     else:
         total_emitted = run_url_mode(config, crawler_config)
 

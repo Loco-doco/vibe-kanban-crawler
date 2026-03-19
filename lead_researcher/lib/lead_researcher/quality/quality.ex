@@ -16,6 +16,11 @@ defmodule LeadResearcher.Quality do
     audience_present = Enum.count(leads, &has_effective_audience?/1)
     enriched = Enum.count(leads, &(&1.enrichment_status == "completed"))
 
+    # Contact readiness metrics (UX-1)
+    contactable = Enum.count(leads, &(&1.contact_readiness == "contactable"))
+    platform_suspect = Enum.count(leads, &(&1.contact_readiness == "platform_suspect"))
+    no_email_leads = Enum.count(leads, &(&1.contact_readiness == "no_email"))
+
     contact_coverage = safe_rate(contact_present, reviewable)
     valid_email_coverage = safe_rate(valid_email + user_corrected, reviewable)
     invalid_email_rate = safe_rate(invalid_email, contact_present)
@@ -39,7 +44,17 @@ defmodule LeadResearcher.Quality do
       enrichment_completed_leads: enriched,
       enrichment_coverage_rate: enrichment_coverage,
       judgment: judgment,
-      suggested_supplement: suggest_supplement(judgment)
+      suggested_supplement: suggest_supplement(judgment),
+      # Contact readiness metrics (UX-1)
+      contactable_leads: contactable,
+      platform_suspect_leads: platform_suspect,
+      no_email_leads: no_email_leads,
+      # Action-oriented metrics (UX-3 / P3)
+      needs_review_leads: Enum.count(leads, &(&1.review_status == "needs_review")),
+      needs_correction_leads: Enum.count(leads, fn l ->
+        (not has_effective_audience?(l)) or l.enrichment_status == "not_started"
+      end),
+      excluded_leads: Enum.count(leads, &(&1.review_status in ["auto_rejected", "rejected"]))
     }
   end
 

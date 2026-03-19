@@ -17,6 +17,7 @@ from urllib.parse import quote_plus, urlparse, unquote
 
 from utils.http_client import fetch_with_retry
 from utils.parser import extract_emails_from_html, extract_links
+from utils.youtube_parser import extract_subscriber_count
 from qa.email_validator import is_valid_email
 
 
@@ -50,10 +51,14 @@ class EmailFinder:
         channel_page_url = channel_url.rstrip("/")
         channel_html = fetch_with_retry(channel_page_url, self.max_retries, self.delay_ms)
 
+        # Extract subscriber_count from channel page HTML
+        channel_subscriber_count = extract_subscriber_count(channel_html) if channel_html else None
+
         ctx = {
             "about_html": channel_html,
             "about_url": channel_page_url,
             "channel_id": channel_id or self._extract_channel_id(channel_url, channel_html),
+            "subscriber_count": channel_subscriber_count,
         }
 
         for strategy_name in strategies:
@@ -63,6 +68,8 @@ class EmailFinder:
 
             try:
                 for lead in method(channel_name, channel_url, ctx):
+                    # Propagate subscriber_count to all leads
+                    lead.setdefault("subscriber_count", ctx.get("subscriber_count"))
                     email_lower = lead["email"].lower()
                     if email_lower not in seen_emails:
                         seen_emails.add(email_lower)

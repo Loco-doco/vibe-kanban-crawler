@@ -17,6 +17,7 @@ from urllib.parse import quote_plus
 from scrapers.base import BaseScraper
 from scrapers.email_finder import EmailFinder
 from utils.http_client import fetch_with_retry
+from utils.youtube_parser import parse_subscriber_text, extract_yt_initial_data
 from qa.email_validator import is_valid_email
 
 
@@ -26,52 +27,6 @@ def _log(message):
 
 def _error(message):
     print(json.dumps({"type": "error", "message": message}), flush=True)
-
-
-def _parse_subscriber_text(text):
-    """Parse subscriber count text like '구독자 1.2만명' or '1.2M subscribers' → int."""
-    if not text:
-        return None
-    text = text.replace(",", "").strip()
-
-    # Korean format: "구독자 1.2만명", "구독자 120명"
-    m = re.search(r"([\d.]+)\s*만", text)
-    if m:
-        try:
-            return int(float(m.group(1)) * 10_000)
-        except ValueError:
-            pass
-
-    # English format: "1.2K", "1.2M"
-    multipliers = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
-    for suffix, mult in multipliers.items():
-        m = re.search(rf"([\d.]+)\s*{suffix}", text, re.IGNORECASE)
-        if m:
-            try:
-                return int(float(m.group(1)) * mult)
-            except ValueError:
-                pass
-
-    # Plain number
-    m = re.search(r"([\d]+)", text)
-    if m:
-        try:
-            return int(m.group(1))
-        except ValueError:
-            pass
-
-    return None
-
-
-def _extract_yt_initial_data(html):
-    """Extract and parse ytInitialData JSON from YouTube HTML page."""
-    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return None
 
 
 class YouTubeDiscoveryScraper(BaseScraper):
@@ -207,7 +162,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
             _error("Failed to fetch YouTube search results page")
             return []
 
-        data = _extract_yt_initial_data(html)
+        data = extract_yt_initial_data(html)
         if not data:
             _error("Failed to parse ytInitialData from YouTube search page")
             return []
@@ -344,7 +299,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
             "channel_id": channel_id,
             "url": url,
             "subscriber_text": sub_text,
-            "subscriber_count": _parse_subscriber_text(sub_text),
+            "subscriber_count": parse_subscriber_text(sub_text),
             "description": desc,
         }
 

@@ -67,6 +67,11 @@ defmodule LeadResearcher.Jobs.JobQueue do
           final_status = Jobs.determine_completion_status(job_id)
           Jobs.update_job_status(job_id, final_status, %{completed_at: DateTime.utc_now()})
           Logger.info("Job #{job_id} finished with status: #{final_status}")
+
+          # Auto post-processing hooks for discovery jobs
+          if final_status in ["completed", "completed_low_yield"] do
+            schedule_post_processing(job_id)
+          end
       end
     end
 
@@ -149,6 +154,43 @@ defmodule LeadResearcher.Jobs.JobQueue do
     case Enum.find(state.running, fn {_id, %{ref: r}} -> r == ref end) do
       {job_id, _} -> {job_id, %{state | running: Map.delete(state.running, job_id)}}
       nil -> {nil, state}
+    end
+  end
+
+  # Post-processing: subscriber backfill → channel enrichment (sequential, fire-and-forget)
+  defp schedule_post_processing(job_id) do
+    job = Jobs.get_job!(job_id)
+
+    # Only auto-enrich primary discovery jobs (not supplementary or URL-mode jobs)
+    if job.mode == "discovery" and is_nil(job.parent_job_id) do
+      Logger.info("Scheduling post-processing for job #{job_id}")
+
+      Task.Supervisor.start_child(LeadResearcher.TaskSupervisor, fn ->
+        try do
+          # Step 1: subscriber backfill
+          Logger.info("Job #{job_id}: auto subscriber backfill starting")
+          case Runner.run_enrich_subscribers(job_id) do
+            {:ok, count} ->
+              Logger.info("Job #{job_id}: auto subscriber backfill done (#{count} updated)")
+            {:error, reason} ->
+              Logger.warning("Job #{job_id}: auto subscriber backfill failed: #{inspect(reason)}")
+          end
+
+          # Step 2: channel enrichment
+          Logger.info("Job #{job_id}: auto channel enrichment starting")
+          case Runner.run_enrich_channels(job_id) do
+            {:ok, count} ->
+              Logger.info("Job #{job_id}: auto channel enrichment done (#{count} enriched)")
+            {:error, reason} ->
+              Logger.warning("Job #{job_id}: auto channel enrichment failed: #{inspect(reason)}")
+          end
+        rescue
+          e ->
+            Logger.error("Job #{job_id}: post-processing error: #{inspect(e)}")
+        end
+      end)
+    else
+      Logger.debug("Skipping post-processing for job #{job_id} (not a primary discovery job)")
     end
   end
 

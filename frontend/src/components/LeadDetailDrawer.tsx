@@ -5,11 +5,14 @@ import EditableField from './EditableField'
 import type { Lead, EditHistoryEntry } from '../types'
 import {
   PLATFORM_LABELS,
+  CONTACT_READINESS_LABELS,
+  SUSPECT_REASON_LABELS,
   EMAIL_STATUS_LABELS,
   AUDIENCE_TIER_LABELS,
   AUDIENCE_DISPLAY_STATUS_LABELS,
   ENRICHMENT_STATUS_LABELS,
   REVIEW_STATUS_LABELS,
+  SOURCE_TYPE_LABELS,
 } from '../types'
 
 interface Props {
@@ -23,6 +26,20 @@ function formatDateTime(iso: string | null) {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
+  if (lead.contact_readiness === 'no_email')
+    return { label: '이메일 확보 필요', priority: 'high' }
+  if (lead.contact_readiness === 'platform_suspect')
+    return { label: '이메일 검증 필요', priority: 'high' }
+  if (lead.audience_display_status === 'not_collected')
+    return { label: '영향력 보정 필요', priority: 'medium' }
+  if (lead.enrichment_status === 'not_started')
+    return { label: '프로필 보강 필요', priority: 'medium' }
+  if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
+    return { label: '연락 가능', priority: 'low' }
+  return { label: '검토 필요', priority: 'medium' }
 }
 
 export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
@@ -48,10 +65,13 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
     if (field === 'audience_size_override') {
       payload[field] = value ? parseInt(value, 10) : null
     } else {
-      // Send null instead of empty string so effective_* fallback works
       payload[field] = value.trim() || null
     }
     updateMutation.mutate(payload as Partial<Lead>)
+  }
+
+  const handleReviewAction = (status: string) => {
+    updateMutation.mutate({ review_status: status } as Partial<Lead>)
   }
 
   const toggleSection = (section: string) => {
@@ -59,6 +79,7 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
   }
 
   const enrichment = lead.enrichment
+  const action = getRecommendedAction(lead)
 
   return (
     <div className="drawer-overlay" onClick={onClose}>
@@ -84,8 +105,82 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
         )}
 
         <div className="drawer-body">
-          {/* Section 1: 기본 정보 */}
-          <DrawerSection title="기본 정보" id="basic" activeSection={activeSection} onToggle={toggleSection}>
+          {/* Section 1: 판단 패널 (상단 고정) */}
+          <div className="judgment-panel">
+            <div className={`judgment-action action-${action.priority}`}>
+              {action.label}
+            </div>
+
+            <div className="judgment-details">
+              <div className="judgment-row">
+                <span className="judgment-icon">&#128203;</span>
+                <span className="judgment-text">
+                  발견 경위: {lead.discovery_keyword ? `"${lead.discovery_keyword}" 검색` : '직접 URL 입력'}
+                  {lead.source_type && ` \u2192 ${SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}에서 확인`}
+                </span>
+              </div>
+
+              <div className="judgment-row">
+                <span className="judgment-icon">&#9993;</span>
+                <span className="judgment-text">
+                  연락 가능성: <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
+                    {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
+                  </span>
+                  {lead.suspect_reason && (
+                    <span className="suspect-reason"> ({SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason})</span>
+                  )}
+                </span>
+              </div>
+
+              <div className="judgment-row">
+                <span className="judgment-icon">&#128202;</span>
+                <span className="judgment-text">
+                  영향력: {lead.audience_display_status === 'collected' ? (
+                    <>
+                      {lead.effective_audience_label || `${lead.effective_audience_size}`}
+                      {lead.effective_audience_tier && (
+                        <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
+                          {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
+                        </span>
+                      )}
+                    </>
+                  ) : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                </span>
+              </div>
+
+              {lead.normalized_tags.length > 0 && (
+                <div className="judgment-row">
+                  <span className="judgment-icon">&#128278;</span>
+                  <span className="judgment-text">
+                    {lead.normalized_tags.map(tag => (
+                      <span key={tag} className="tag-chip">{tag}</span>
+                    ))}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="judgment-actions">
+              <button
+                className="judgment-btn approve"
+                onClick={() => handleReviewAction('approved')}
+                disabled={lead.review_status === 'approved'}
+              >승인</button>
+              <button
+                className="judgment-btn hold"
+                onClick={() => handleReviewAction('held')}
+                disabled={lead.review_status === 'held'}
+              >보류</button>
+              <button
+                className="judgment-btn reject"
+                onClick={() => handleReviewAction('rejected')}
+                disabled={lead.review_status === 'rejected'}
+              >제외</button>
+            </div>
+          </div>
+
+          {/* Section 2: 프로필 */}
+          <DrawerSection title="프로필" id="profile" activeSection={activeSection} onToggle={toggleSection}>
             <EditableField
               label="리드명 (표시)"
               value={lead.display_name || lead.channel_name}
@@ -101,14 +196,75 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
                 ) : '(없음)'}
               </span>
             </div>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">신뢰도</span>
-              <span className="drawer-field-value">{(lead.confidence_score * 100).toFixed(0)}%</span>
-            </div>
+            {enrichment?.business_type && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">비즈니스 유형</span>
+                <span className="drawer-field-value">{enrichment.business_type}</span>
+              </div>
+            )}
+            {enrichment?.profile_summary && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">프로필 요약</span>
+                <span className="drawer-field-value text-sm">{enrichment.profile_summary}</span>
+              </div>
+            )}
+            {enrichment?.business_summary && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">비즈니스 요약</span>
+                <span className="drawer-field-value text-sm">{enrichment.business_summary}</span>
+              </div>
+            )}
+            {/* 태그 */}
+            {lead.normalized_tags.length > 0 && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">카테고리</span>
+                <div className="drawer-tag-list">
+                  {lead.normalized_tags.map((tag, i) => (
+                    <span key={i} className="tag-chip">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {lead.discovery_keywords.length > 0 && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">발견 키워드</span>
+                <div className="drawer-tag-list">
+                  {lead.discovery_keywords.map((kw, i) => (
+                    <span key={i} className="tag-chip discovery">{kw}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {enrichment?.profile_tags && enrichment.profile_tags.length > 0 && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">프로필 태그</span>
+                <div className="drawer-tag-list">
+                  {enrichment.profile_tags.map((tag, i) => (
+                    <span key={i} className="tag-chip profile">{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {enrichment?.recent_activity_summary && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">최근 활동</span>
+                <span className="drawer-field-value text-sm">{enrichment.recent_activity_summary}</span>
+              </div>
+            )}
+            {enrichment?.content_topics && enrichment.content_topics.length > 0 && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">콘텐츠 주제</span>
+                <div className="drawer-tag-list">
+                  {enrichment.content_topics.map((t, i) => (
+                    <span key={i} className="drawer-tag">{t}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </DrawerSection>
 
-          {/* Section 2: 연락처 */}
-          <DrawerSection title="연락처" id="contact" activeSection={activeSection} onToggle={toggleSection}>
+          {/* Section 3: 연락처 / 영향력 */}
+          <DrawerSection title="연락처 / 영향력" id="contact" activeSection={activeSection} onToggle={toggleSection}>
             <EditableField
               label="연락처 이메일"
               value={lead.contact_email || lead.email}
@@ -116,6 +272,20 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
               onSave={val => handleFieldSave('contact_email', val)}
               placeholder="이메일 주소"
             />
+            <div className="drawer-field-readonly">
+              <span className="drawer-field-label">연락 가능성</span>
+              <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
+                {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
+              </span>
+            </div>
+            {lead.suspect_reason && (
+              <div className="drawer-field-readonly">
+                <span className="drawer-field-label">의심 사유</span>
+                <span className="drawer-field-value suspect-reason">
+                  {SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}
+                </span>
+              </div>
+            )}
             <div className="drawer-field-readonly">
               <span className="drawer-field-label">이메일 상태</span>
               <span className={`email-status-badge ${lead.email_status}`}>
@@ -128,24 +298,6 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
                 <span className="drawer-field-value">{enrichment.suggested_email}</span>
               </div>
             )}
-            {enrichment?.contact_channels && enrichment.contact_channels.length > 0 && (
-              <div className="drawer-field-readonly">
-                <span className="drawer-field-label">추가 연락 채널</span>
-                <div className="drawer-tag-list">
-                  {enrichment.contact_channels.map((ch, i) => (
-                    <span key={i} className="drawer-tag">{ch}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </DrawerSection>
-
-          {/* Section 3: 플랫폼/영향력 */}
-          <DrawerSection title="플랫폼 / 영향력" id="audience" activeSection={activeSection} onToggle={toggleSection}>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">플랫폼</span>
-              <span className="drawer-field-value">{PLATFORM_LABELS[lead.platform] || lead.platform}</span>
-            </div>
             <div className="drawer-field-readonly">
               <span className="drawer-field-label">영향력 상태</span>
               <span className="drawer-field-value">
@@ -163,7 +315,7 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
               placeholder="구독자/팔로워 수"
             />
             <div className="drawer-field-readonly">
-              <span className="drawer-field-label">등급</span>
+              <span className="drawer-field-label">영향력 규모 구간</span>
               <span className="drawer-field-value">
                 {lead.effective_audience_tier ? (
                   <span className={`tier-badge ${lead.effective_audience_tier}`}>
@@ -182,88 +334,44 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
                 </div>
               </div>
             )}
-          </DrawerSection>
-
-          {/* Section 4: 비즈니스/콘텐츠 */}
-          <DrawerSection title="비즈니스 / 콘텐츠" id="business" activeSection={activeSection} onToggle={toggleSection}>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">비즈니스 유형</span>
-              <span className="drawer-field-value">{enrichment?.business_type || '(미수집)'}</span>
-            </div>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">비즈니스 요약</span>
-              <span className="drawer-field-value text-sm">{enrichment?.business_summary || '(미수집)'}</span>
-            </div>
-            {enrichment?.content_topics && enrichment.content_topics.length > 0 && (
+            {enrichment?.contact_channels && enrichment.contact_channels.length > 0 && (
               <div className="drawer-field-readonly">
-                <span className="drawer-field-label">콘텐츠 주제</span>
+                <span className="drawer-field-label">추가 연락 채널</span>
                 <div className="drawer-tag-list">
-                  {enrichment.content_topics.map((t, i) => (
-                    <span key={i} className="drawer-tag">{t}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {enrichment?.monetization_signals && enrichment.monetization_signals.length > 0 && (
-              <div className="drawer-field-readonly">
-                <span className="drawer-field-label">수익화 시그널</span>
-                <div className="drawer-tag-list">
-                  {enrichment.monetization_signals.map((s, i) => (
-                    <span key={i} className="drawer-tag">{s}</span>
+                  {enrichment.contact_channels.map((ch, i) => (
+                    <span key={i} className="drawer-tag">{ch}</span>
                   ))}
                 </div>
               </div>
             )}
           </DrawerSection>
 
-          {/* Section 5: 최근 동향 (from enrichment) */}
-          <DrawerSection title="최근 동향" id="trends" activeSection={activeSection} onToggle={toggleSection}>
-            {enrichment ? (
-              <>
-                <div className="drawer-field-readonly">
-                  <span className="drawer-field-label">프로필 요약</span>
-                  <span className="drawer-field-value text-sm">{enrichment.profile_summary || '(없음)'}</span>
-                </div>
-                <div className="drawer-field-readonly">
-                  <span className="drawer-field-label">최근 활동</span>
-                  <span className="drawer-field-value text-sm">{enrichment.recent_activity_summary || '(없음)'}</span>
-                </div>
-                <div className="drawer-field-readonly">
-                  <span className="drawer-field-label">트렌드 요약</span>
-                  <span className="drawer-field-value text-sm">{enrichment.trend_summary || '(없음)'}</span>
-                </div>
-                {enrichment.enrichment_confidence !== null && (
-                  <div className="drawer-field-readonly">
-                    <span className="drawer-field-label">보강 신뢰도</span>
-                    <span className="drawer-field-value">{(enrichment.enrichment_confidence * 100).toFixed(0)}%</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="drawer-empty-section">보강 데이터 없음</div>
-            )}
-          </DrawerSection>
-
-          {/* Section 6: 키워드 */}
-          <DrawerSection title="키워드" id="keywords" activeSection={activeSection} onToggle={toggleSection}>
+          {/* Section 4: 출처 근거 */}
+          <DrawerSection title="출처 근거" id="source" activeSection={activeSection} onToggle={toggleSection}>
             <div className="drawer-field-readonly">
-              <span className="drawer-field-label">발견 키워드</span>
-              <span className="drawer-field-value">{lead.discovery_keyword || '(없음)'}</span>
+              <span className="drawer-field-label">근거 링크</span>
+              <span className="drawer-field-value">
+                {lead.evidence_link ? (
+                  <a href={lead.evidence_link} target="_blank" rel="noopener noreferrer">
+                    {lead.evidence_link.length > 60 ? lead.evidence_link.slice(0, 60) + '...' : lead.evidence_link}
+                  </a>
+                ) : '(없음)'}
+              </span>
             </div>
-            {enrichment?.descriptor_keywords && enrichment.descriptor_keywords.length > 0 && (
-              <div className="drawer-field-readonly">
-                <span className="drawer-field-label">보강 키워드</span>
-                <div className="drawer-tag-list">
-                  {enrichment.descriptor_keywords.map((k, i) => (
-                    <span key={i} className="drawer-tag">{k}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </DrawerSection>
-
-          {/* Section 7: Source Evidence (읽기전용 원본) */}
-          <DrawerSection title="출처 근거 (원본)" id="source" activeSection={activeSection} onToggle={toggleSection}>
+            <div className="drawer-field-readonly">
+              <span className="drawer-field-label">출처 유형</span>
+              <span className="drawer-field-value">{SOURCE_TYPE_LABELS[lead.source_type || ''] || lead.source_type || '-'}</span>
+            </div>
+            <div className="drawer-field-readonly">
+              <span className="drawer-field-label">출처 URL</span>
+              <span className="drawer-field-value">
+                {lead.source_url ? (
+                  <a href={lead.source_url} target="_blank" rel="noopener noreferrer">
+                    {lead.source_url.length > 60 ? lead.source_url.slice(0, 60) + '...' : lead.source_url}
+                  </a>
+                ) : '-'}
+              </span>
+            </div>
             <div className="drawer-field-readonly">
               <span className="drawer-field-label">크롤러 이메일</span>
               <span className="drawer-field-value">{lead.email || '(수집 안 됨)'}</span>
@@ -277,28 +385,8 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
               <span className="drawer-field-value">{lead.subscriber_count ?? '(미수집)'}</span>
             </div>
             <div className="drawer-field-readonly">
-              <span className="drawer-field-label">근거 링크</span>
-              <span className="drawer-field-value">
-                {lead.evidence_link ? (
-                  <a href={lead.evidence_link} target="_blank" rel="noopener noreferrer">
-                    {lead.evidence_link.length > 60 ? lead.evidence_link.slice(0, 60) + '...' : lead.evidence_link}
-                  </a>
-                ) : '(없음)'}
-              </span>
-            </div>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">출처 유형</span>
-              <span className="drawer-field-value">{lead.source_type || '-'}</span>
-            </div>
-            <div className="drawer-field-readonly">
-              <span className="drawer-field-label">출처 URL</span>
-              <span className="drawer-field-value">
-                {lead.source_url ? (
-                  <a href={lead.source_url} target="_blank" rel="noopener noreferrer">
-                    {lead.source_url.length > 60 ? lead.source_url.slice(0, 60) + '...' : lead.source_url}
-                  </a>
-                ) : '-'}
-              </span>
+              <span className="drawer-field-label">신뢰도</span>
+              <span className="drawer-field-value">{(lead.confidence_score * 100).toFixed(0)}%</span>
             </div>
             <div className="drawer-field-readonly">
               <span className="drawer-field-label">보강 상태</span>
@@ -308,7 +396,7 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
             </div>
           </DrawerSection>
 
-          {/* Section 8: 사용자 보정 이력 */}
+          {/* Section 5: 보정 이력 */}
           <DrawerSection title="보정 이력" id="history" activeSection={activeSection} onToggle={toggleSection}>
             {editHistory && editHistory.length > 0 ? (
               <div className="edit-history-list">
@@ -363,7 +451,7 @@ const FIELD_LABELS: Record<string, string> = {
   display_name: '리드명',
   contact_email: '연락처 이메일',
   audience_size_override: '영향력 (수동 보정)',
-  audience_tier_override: '등급 (수동 보정)',
+  audience_tier_override: '영향력 규모 (수동 보정)',
   email_status: '이메일 상태',
   review_status: '리뷰 상태',
 }

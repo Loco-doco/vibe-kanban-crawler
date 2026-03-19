@@ -5,6 +5,7 @@ from urllib.parse import urlparse, urljoin
 from scrapers.base import BaseScraper
 from utils.http_client import fetch_with_retry
 from utils.parser import extract_emails_from_html, extract_links, extract_meta_content
+from utils.youtube_parser import extract_subscriber_count
 from qa.email_validator import is_valid_email
 
 
@@ -20,7 +21,7 @@ class YouTubeScraper(BaseScraper):
             return
 
         channel_name = self._extract_channel_name(html)
-        subscriber_count = self._extract_subscriber_count(html)
+        subscriber_count = extract_subscriber_count(html)
 
         # Extract emails from page text
         emails = extract_emails_from_html(html)
@@ -65,29 +66,6 @@ class YouTubeScraper(BaseScraper):
         if match:
             return match.group(1)
         return None
-
-    def _extract_subscriber_count(self, html):
-        match = re.search(r'"subscriberCountText"\s*:\s*\{[^}]*"simpleText"\s*:\s*"([^"]+)"', html)
-        if match:
-            return self._parse_count(match.group(1))
-        match = re.search(r'([\d,.]+[KMB]?)\s*subscribers?', html, re.IGNORECASE)
-        if match:
-            return self._parse_count(match.group(1))
-        return None
-
-    def _parse_count(self, text):
-        text = text.replace(",", "").strip()
-        multipliers = {"K": 1000, "M": 1000000, "B": 1000000000}
-        for suffix, mult in multipliers.items():
-            if text.upper().endswith(suffix):
-                try:
-                    return int(float(text[:-1]) * mult)
-                except ValueError:
-                    return None
-        try:
-            return int(float(text))
-        except ValueError:
-            return None
 
     def _extract_from_initial_data(self, html, channel_url, channel_name, subscriber_count):
         """Try to extract emails from ytInitialData JSON embedded in page."""

@@ -1,12 +1,10 @@
 import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
-  EMAIL_STATUS_LABELS,
+  CONTACT_READINESS_LABELS,
   AUDIENCE_TIER_LABELS,
   AUDIENCE_DISPLAY_STATUS_LABELS,
-  SOURCE_TYPE_LABELS,
   REVIEW_STATUS_LABELS,
-  ENRICHMENT_STATUS_LABELS,
 } from '../types'
 
 interface Props {
@@ -17,10 +15,18 @@ interface Props {
   onRowClick: (lead: Lead) => void
 }
 
-function formatTime(iso: string) {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
+  if (lead.contact_readiness === 'no_email')
+    return { label: '이메일 확보 필요', priority: 'high' }
+  if (lead.contact_readiness === 'platform_suspect')
+    return { label: '이메일 검증 필요', priority: 'high' }
+  if (lead.audience_display_status === 'not_collected')
+    return { label: '영향력 보정 필요', priority: 'medium' }
+  if (lead.enrichment_status === 'not_started')
+    return { label: '프로필 보강 필요', priority: 'medium' }
+  if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
+    return { label: '연락 가능', priority: 'low' }
+  return { label: '검토 필요', priority: 'medium' }
 }
 
 export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onRowClick }: Props) {
@@ -39,91 +45,81 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
               />
             </th>
             <th>리드명</th>
-            <th>이메일</th>
-            <th>이메일 상태</th>
-            <th>플랫폼</th>
-            <th>영향력</th>
-            <th>등급</th>
-            <th>키워드</th>
-            <th>출처</th>
+            <th>연락 가능성</th>
+            <th>플랫폼 / 영향력</th>
+            <th>카테고리</th>
             <th>리뷰</th>
-            <th>보강</th>
-            <th>갱신</th>
+            <th>추천 액션</th>
           </tr>
         </thead>
         <tbody>
-          {leads.map(lead => (
-            <tr
-              key={lead.id}
-              className={`review-row${selectedIds.has(lead.id) ? ' selected' : ''}`}
-              onClick={() => onRowClick(lead)}
-            >
-              <td className="col-check" onClick={e => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(lead.id)}
-                  onChange={() => onToggleSelect(lead.id)}
-                />
-              </td>
-              <td className="col-name">
-                {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
-              </td>
-              <td className="col-email">
-                {lead.effective_email || <span className="text-muted">이메일 없음</span>}
-              </td>
-              <td>
-                <span className={`email-status-badge ${lead.email_status}`}>
-                  {EMAIL_STATUS_LABELS[lead.email_status] || lead.email_status}
-                </span>
-              </td>
-              <td>
-                <span className={`platform-badge ${lead.platform}`}>
-                  {PLATFORM_LABELS[lead.platform] || lead.platform}
-                </span>
-              </td>
-              <td className="col-audience">
-                {lead.audience_display_status === 'collected' ? (
-                  <span className="audience-value">
-                    {lead.effective_audience_label || lead.effective_audience_size}
+          {leads.map(lead => {
+            const action = getRecommendedAction(lead)
+            return (
+              <tr
+                key={lead.id}
+                className={`review-row${selectedIds.has(lead.id) ? ' selected' : ''}`}
+                onClick={() => onRowClick(lead)}
+              >
+                <td className="col-check" onClick={e => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(lead.id)}
+                    onChange={() => onToggleSelect(lead.id)}
+                  />
+                </td>
+                <td className="col-name">
+                  {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
+                </td>
+                <td>
+                  <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
+                    {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
                   </span>
-                ) : (
-                  <span className={`audience-status ${lead.audience_display_status}`}>
-                    {AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                </td>
+                <td className="col-platform-audience">
+                  <span className={`platform-badge ${lead.platform}`}>
+                    {PLATFORM_LABELS[lead.platform] || lead.platform}
                   </span>
-                )}
-              </td>
-              <td>
-                {lead.effective_audience_tier ? (
-                  <span className={`tier-badge ${lead.effective_audience_tier}`}>
-                    {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
+                  {' '}
+                  {lead.audience_display_status === 'collected' ? (
+                    <span className="audience-value-inline">
+                      {lead.effective_audience_label || lead.effective_audience_size}
+                    </span>
+                  ) : (
+                    <span className={`audience-status ${lead.audience_display_status}`}>
+                      {AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                    </span>
+                  )}
+                  {lead.effective_audience_tier && (
+                    <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
+                      {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
+                    </span>
+                  )}
+                </td>
+                <td className="col-tags">
+                  {lead.normalized_tags.length > 0 ? (
+                    <span className="tag-chips">
+                      {lead.normalized_tags.map(tag => (
+                        <span key={tag} className="tag-chip">{tag}</span>
+                      ))}
+                    </span>
+                  ) : lead.discovery_keyword ? (
+                    <span className="text-muted">{lead.discovery_keyword}</span>
+                  ) : '-'}
+                </td>
+                <td>
+                  <span className={`review-badge ${lead.review_status}`}>
+                    {REVIEW_STATUS_LABELS[lead.review_status]}
                   </span>
-                ) : null}
-              </td>
-              <td className="col-keyword">
-                {lead.discovery_keyword || '-'}
-              </td>
-              <td>
-                {lead.source_type ? (
-                  <span className="source-badge-sm">
-                    {SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}
+                </td>
+                <td>
+                  <span className={`action-badge ${action.priority}`}>
+                    {action.label}
                   </span>
-                ) : '-'}
-              </td>
-              <td>
-                <span className={`review-badge ${lead.review_status}`}>
-                  {REVIEW_STATUS_LABELS[lead.review_status]}
-                </span>
-              </td>
-              <td>
-                <span className={`enrichment-status-badge ${lead.enrichment_status}`}>
-                  {ENRICHMENT_STATUS_LABELS[lead.enrichment_status]}
-                </span>
-              </td>
-              <td className="col-time">
-                {lead.updated_at ? formatTime(lead.updated_at) : '-'}
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

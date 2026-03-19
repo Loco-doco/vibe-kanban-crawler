@@ -28,6 +28,16 @@ export async function createSupplementaryJob(jobId: number, supplementaryType: S
   return data.data
 }
 
+export async function enrichSubscribers(jobId: number): Promise<{ status: string; job_id: number }> {
+  const { data } = await api.post<{ status: string; job_id: number }>(`/jobs/${jobId}/enrich-subscribers`)
+  return data
+}
+
+export async function enrichChannels(jobId: number): Promise<{ status: string; job_id: number }> {
+  const { data } = await api.post<{ status: string; job_id: number }>(`/jobs/${jobId}/enrich-channels`)
+  return data
+}
+
 export interface ParsedPrompt {
   keywords: string[]
   category_tags: string[]
