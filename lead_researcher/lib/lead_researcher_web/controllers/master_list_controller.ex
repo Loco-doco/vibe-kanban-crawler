@@ -31,27 +31,21 @@ defmodule LeadResearcherWeb.MasterListController do
   def add(conn, %{"job_id" => job_id} = params) do
     lead_ids = Map.get(params, "lead_ids")
 
-    case MasterList.add_from_job(job_id, lead_ids) do
-      {:ok, result} ->
-        duplicates = Enum.map(result.duplicates, fn dup ->
-          %{
-            group_id: dup.group_id,
-            reason: dup.reason,
-            new_lead: lead_data(dup.new_lead),
-            existing_lead: lead_data(dup.existing_lead)
-          }
-        end)
+    {:ok, result} = MasterList.add_from_job(job_id, lead_ids)
 
-        json(conn, %{
-          added: result.added,
-          duplicates: duplicates
-        })
+    duplicates = Enum.map(result.duplicates, fn dup ->
+      %{
+        group_id: dup.group_id,
+        reason: dup.reason,
+        new_lead: lead_data(dup.new_lead),
+        existing_lead: lead_data(dup.existing_lead)
+      }
+    end)
 
-      {:error, reason} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: inspect(reason)})
-    end
+    json(conn, %{
+      added: result.added,
+      duplicates: duplicates
+    })
   end
 
   def remove(conn, %{"lead_id" => lead_id}) do

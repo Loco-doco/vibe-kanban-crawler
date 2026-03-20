@@ -188,6 +188,8 @@ export interface ConflictDetail {
   rule: 'channel_url' | 'handle' | 'contact_email' | 'platform_name'
   existing_lead_id: number
   value: string
+  reason_label?: string
+  similarity_score?: number
 }
 
 export interface ApproveAndQueueResult {

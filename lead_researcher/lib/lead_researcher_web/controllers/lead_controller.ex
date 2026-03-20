@@ -48,26 +48,31 @@ defmodule LeadResearcherWeb.LeadController do
 
   @doc "Approve leads and queue for master review with duplicate checking"
   def approve_and_queue(conn, %{"lead_ids" => lead_ids}) when is_list(lead_ids) do
-    case LeadResearcher.Handoff.approve_and_queue(lead_ids) do
-      {:ok, result} ->
-        json(conn, %{
-          ready: result.ready,
-          conflicts: result.conflicts,
-          conflict_leads:
-            Enum.map(result.conflict_leads, fn cl ->
-              %{
-                lead_id: cl.lead_id,
-                conflicts:
-                  Enum.map(cl.conflicts, fn c ->
-                    %{rule: c.rule, existing_lead_id: c.existing_lead_id, value: c.value}
-                  end)
-              }
-            end)
-        })
+    {:ok, result} = LeadResearcher.Handoff.approve_and_queue(lead_ids)
 
-      {:error, reason} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: inspect(reason)})
-    end
+    json(conn, %{
+      ready: result.ready,
+      conflicts: result.conflicts,
+      conflict_leads:
+        Enum.map(result.conflict_leads, fn cl ->
+          %{
+            lead_id: cl.lead_id,
+            conflicts:
+              Enum.map(cl.conflicts, fn c ->
+                base = %{
+                  rule: c.rule,
+                  existing_lead_id: c.existing_lead_id,
+                  value: c.value,
+                  reason_label: c[:reason_label]
+                }
+
+                if c[:similarity_score],
+                  do: Map.put(base, :similarity_score, c[:similarity_score]),
+                  else: base
+              end)
+          }
+        end)
+    })
   end
 
   def edit_history(conn, %{"id" => id}) do
