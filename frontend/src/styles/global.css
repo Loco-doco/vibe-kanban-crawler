@@ -3288,9 +3288,13 @@ body {
 }
 
 /* Row click = select feedback */
-.review-row { cursor: default; }
+.review-row { cursor: default; transition: background 0.1s; }
 .review-row:hover { background: var(--gray-50); }
-.review-row.selected { background: #eff6ff; }
+.review-row.selected {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 var(--info);
+}
+.review-row.selected:hover { background: #dbeafe; }
 
 /* 6-9: Quick Detail (Drawer) — judgment hierarchy */
 .quick-detail-section {
@@ -3389,7 +3393,7 @@ body {
 .full-detail-modal {
   background: white;
   border-radius: 12px;
-  width: min(90vw, 840px);
+  width: min(92vw, 960px);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
