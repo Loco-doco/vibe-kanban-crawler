@@ -3263,3 +3263,219 @@ body {
   color: var(--gray-500);
   padding: 4px 0;
 }
+
+/* ============================================
+   Phase 6 Revised — WS1 Styles
+   6-8: Row Interaction, 6-9: Quick/Full Detail, 6-13: Zero States
+   ============================================ */
+
+/* 6-8: Detail view button in table */
+.col-detail { width: 36px; text-align: center; }
+.detail-view-btn {
+  background: none;
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  color: var(--gray-500);
+  transition: all 0.15s;
+}
+.detail-view-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  border-color: var(--gray-300);
+}
+
+/* Row click = select feedback */
+.review-row { cursor: default; }
+.review-row:hover { background: var(--gray-50); }
+.review-row.selected { background: #eff6ff; }
+
+/* 6-9: Quick Detail (Drawer) — judgment hierarchy */
+.quick-detail-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.quick-detail-section:last-of-type { border-bottom: none; }
+
+.quick-detail-section-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.quick-detail-icon { font-size: 1rem; }
+
+.quick-detail-reason {
+  font-size: 0.78rem;
+  color: var(--gray-500);
+  margin-bottom: 6px;
+  padding-left: 22px;
+}
+
+.quick-detail-issues {
+  list-style: none;
+  padding: 0 0 0 22px;
+  margin: 0;
+}
+.quick-detail-issues li {
+  font-size: 0.78rem;
+  color: var(--gray-600);
+  padding: 2px 0;
+}
+.quick-detail-issues li::before {
+  content: '\00B7\00A0';
+  color: var(--gray-400);
+}
+
+.quick-detail-field {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0 3px 22px;
+  font-size: 0.78rem;
+}
+.quick-detail-label {
+  color: var(--gray-400);
+  min-width: 50px;
+  flex-shrink: 0;
+}
+.quick-detail-value {
+  color: var(--gray-700);
+  word-break: break-all;
+}
+.quick-detail-link {
+  color: var(--info);
+  text-decoration: none;
+  word-break: break-all;
+}
+.quick-detail-link:hover { text-decoration: underline; }
+
+/* Full Detail CTA in drawer */
+.full-detail-cta {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  color: var(--info);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+.full-detail-cta:hover {
+  background: #eff6ff;
+  border-color: var(--info);
+}
+
+/* 6-9: Full Detail Modal */
+.full-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.full-detail-modal {
+  background: white;
+  border-radius: 12px;
+  width: min(90vw, 840px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.full-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--gray-100);
+}
+.full-detail-header h2 {
+  font-size: 1.1rem;
+  margin: 0 0 6px;
+}
+.full-detail-header-badges {
+  display: flex;
+  gap: 6px;
+}
+.full-detail-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0 24px;
+}
+.full-detail-tab {
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  color: var(--gray-500);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.full-detail-tab:hover { color: var(--gray-700); }
+.full-detail-tab.active {
+  color: var(--info);
+  border-bottom-color: var(--info);
+}
+.full-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.full-detail-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 6-13: Zero / Error / Retry State */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--gray-500);
+}
+.empty-state-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 12px;
+}
+.empty-state h3 {
+  font-size: 1rem;
+  color: var(--gray-600);
+  margin: 0 0 6px;
+}
+.empty-state p {
+  font-size: 0.82rem;
+  color: var(--gray-400);
+  margin: 0 0 16px;
+}
+.empty-state-action-btn {
+  display: inline-block;
+  padding: 8px 16px;
+  background: var(--info);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.empty-state-action-btn:hover {
+  background: #2563eb;
+}

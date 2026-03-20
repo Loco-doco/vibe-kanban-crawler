@@ -10,6 +10,7 @@ import FilterStatusBar from './FilterStatusBar'
 import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
 import LeadDetailDrawer from './LeadDetailDrawer'
+import LeadFullDetail from './LeadFullDetail'
 import SupplementarySearchModal from './SupplementarySearchModal'
 import type { Job, Lead, ReviewStatus, SupplementaryType } from '../types'
 
@@ -44,6 +45,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId ?? null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
+  const [fullDetailLeadId, setFullDetailLeadId] = useState<number | null>(null)
 
   // L1 Primary queue (default: 검증 필요)
   const [activeQueue, setActiveQueue] = useState<ActionQueue>('needs_verification')
@@ -141,6 +143,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       case 'needs_verification': return quality.needs_verification_leads
       case 'contactable': return quality.contactable_leads
       case 'needs_correction': return quality.needs_correction_leads
+      case 'held': return quality.held_leads
       case 'excluded': return quality.excluded_leads
       default: return quality.total_leads
     }
@@ -220,7 +223,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     bulkMutation.mutate({ ids: Array.from(selectedLeadIds), status })
   }, [selectedLeadIds, bulkMutation])
 
-  const handleRowClick = useCallback((lead: Lead) => {
+  const handleViewDetail = useCallback((lead: Lead) => {
     setDrawerLeadId(lead.id)
   }, [])
 
@@ -339,7 +342,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
                       {tab.value === 'needs_verification' ? quality.needs_verification_leads
                         : tab.value === 'contactable' ? quality.contactable_leads
                         : tab.value === 'needs_correction' ? quality.needs_correction_leads
-                        : tab.value === 'held' ? quality.needs_review_leads
+                        : tab.value === 'held' ? quality.held_leads
                         : tab.value === 'excluded' ? quality.excluded_leads
                         : 0}
                     </span>
@@ -413,31 +416,46 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
             {leadsLoading ? (
               <div className="loading-state">불러오는 중...</div>
             ) : !leads?.length ? (
-              <div className="empty-state">
-                <span className="empty-state-icon">{'\u{1F50D}'}</span>
-                <h3>해당 큐에 리드가 없습니다</h3>
-              </div>
+              <QueueEmptyState
+                queue={activeQueue}
+                hasSecondaryFilters={secondaryFilters.length > 0}
+                onClearFilters={handleClearSecondaryFilters}
+                onSwitchQueue={handleQueueChange}
+              />
             ) : (
               <ReviewTable
                 leads={leads}
                 selectedIds={selectedLeadIds}
                 onToggleSelect={handleToggleSelect}
                 onToggleSelectAll={handleToggleSelectAll}
-                onRowClick={handleRowClick}
+                onViewDetail={handleViewDetail}
               />
             )}
           </>
         )}
       </div>
 
-      {/* Lead Detail Drawer */}
+      {/* Lead Detail Drawer (Quick Detail) */}
       {drawerLead && (
         <LeadDetailDrawer
           lead={drawerLead}
           onClose={handleCloseDrawer}
           onUpdated={handleLeadUpdated}
+          onOpenFullDetail={() => { setFullDetailLeadId(drawerLead.id); setDrawerLeadId(null) }}
         />
       )}
+
+      {/* Full Detail Modal */}
+      {fullDetailLeadId && leads && (() => {
+        const fullLead = leads.find(l => l.id === fullDetailLeadId)
+        return fullLead ? (
+          <LeadFullDetail
+            lead={fullLead}
+            onClose={() => setFullDetailLeadId(null)}
+            onUpdated={handleLeadUpdated}
+          />
+        ) : null
+      })()}
 
       {/* Supplementary Search Modal */}
       {supplementModalType && activeJobId && (
@@ -446,6 +464,75 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
           suggestedType={supplementModalType}
           onClose={() => setSupplementModalType(null)}
         />
+      )}
+    </div>
+  )
+}
+
+/* 6-13: Queue-specific empty state component */
+interface QueueEmptyProps {
+  queue: ActionQueue
+  hasSecondaryFilters: boolean
+  onClearFilters: () => void
+  onSwitchQueue: (queue: ActionQueue) => void
+}
+
+const QUEUE_EMPTY_CONFIG: Record<ActionQueue, { icon: string; title: string; description: string; actionLabel?: string; actionQueue?: ActionQueue }> = {
+  needs_verification: {
+    icon: '\u2705',
+    title: '검증할 리드가 없습니다',
+    description: '모든 리드가 이미 검증되었습니다.',
+    actionLabel: '연락 대상 확인',
+    actionQueue: 'contactable',
+  },
+  contactable: {
+    icon: '\uD83D\uDCED',
+    title: '연락 대상이 없습니다',
+    description: '검증 필요 큐에서 리드를 승인해주세요.',
+    actionLabel: '검증 필요 큐로 이동',
+    actionQueue: 'needs_verification',
+  },
+  needs_correction: {
+    icon: '\u2705',
+    title: '보정할 리드가 없습니다',
+    description: '모든 데이터가 확보되었습니다.',
+  },
+  held: {
+    icon: '\uD83D\uDCCB',
+    title: '보류 중인 리드가 없습니다',
+    description: '보류된 리드가 없습니다.',
+  },
+  excluded: {
+    icon: '\uD83D\uDDD1',
+    title: '제외된 리드가 없습니다',
+    description: '제외된 리드가 없습니다.',
+  },
+}
+
+function QueueEmptyState({ queue, hasSecondaryFilters, onClearFilters, onSwitchQueue }: QueueEmptyProps) {
+  if (hasSecondaryFilters) {
+    return (
+      <div className="empty-state">
+        <span className="empty-state-icon">{'\uD83D\uDD0D'}</span>
+        <h3>조건에 맞는 리드가 없습니다</h3>
+        <p>현재 필터를 변경하거나 해제해보세요.</p>
+        <button className="empty-state-action-btn" onClick={onClearFilters}>
+          필터 해제
+        </button>
+      </div>
+    )
+  }
+
+  const config = QUEUE_EMPTY_CONFIG[queue]
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon">{config.icon}</span>
+      <h3>{config.title}</h3>
+      <p>{config.description}</p>
+      {config.actionLabel && config.actionQueue && (
+        <button className="empty-state-action-btn" onClick={() => onSwitchQueue(config.actionQueue!)}>
+          {config.actionLabel}
+        </button>
       )}
     </div>
   )

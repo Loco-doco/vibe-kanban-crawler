@@ -150,6 +150,7 @@ export interface QualityMetrics {
   platform_suspect_leads: number
   no_email_leads: number
   needs_review_leads: number
+  held_leads: number
   needs_verification_leads: number
   needs_correction_leads: number
   excluded_leads: number

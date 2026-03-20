@@ -40,7 +40,7 @@ interface Props {
   selectedIds: Set<number>
   onToggleSelect: (id: number) => void
   onToggleSelectAll: () => void
-  onRowClick: (lead: Lead) => void
+  onViewDetail: (lead: Lead) => void
 }
 
 function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
@@ -62,7 +62,7 @@ function truncateEmail(email: string | null, max: number = 28): string {
   return email.length > max ? email.slice(0, max) + '...' : email
 }
 
-export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onRowClick }: Props) {
+export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onViewDetail }: Props) {
   const allSelected = leads.length > 0 && selectedIds.size === leads.length
 
   return (
@@ -84,6 +84,7 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
             <th>카테고리</th>
             <th>리뷰</th>
             <th>다음 단계</th>
+            <th className="col-detail"></th>
           </tr>
         </thead>
         <tbody>
@@ -95,13 +96,14 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
               <tr
                 key={lead.id}
                 className={`review-row${selectedIds.has(lead.id) ? ' selected' : ''}`}
-                onClick={() => onRowClick(lead)}
+                onClick={() => onToggleSelect(lead.id)}
               >
-                <td className="col-check" onClick={e => e.stopPropagation()}>
+                <td className="col-check">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(lead.id)}
                     onChange={() => onToggleSelect(lead.id)}
+                    onClick={e => e.stopPropagation()}
                   />
                 </td>
                 <td className="col-name">
@@ -179,6 +181,13 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                   <span className={`action-label ${action.priority}`} title={action.label}>
                     {action.label}
                   </span>
+                </td>
+                <td className="col-detail">
+                  <button
+                    className="detail-view-btn"
+                    onClick={e => { e.stopPropagation(); onViewDetail(lead) }}
+                    title="상세 보기"
+                  >{'\uD83D\uDD0D'}</button>
                 </td>
               </tr>
             )
