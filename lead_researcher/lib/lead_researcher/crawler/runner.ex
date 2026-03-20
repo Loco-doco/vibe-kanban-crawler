@@ -2,6 +2,7 @@ defmodule LeadResearcher.Crawler.Runner do
   require Logger
 
   alias LeadResearcher.{Jobs, Leads, Enrichments}
+  alias LeadResearcher.Enrichments.EnrichmentRuns
   alias LeadResearcher.Leads.Lead
   alias LeadResearcher.Crawler.Bridge
   alias LeadResearcher.Dedup
@@ -117,11 +118,12 @@ defmodule LeadResearcher.Crawler.Runner do
   Backfill subscriber_count for leads in a job that are missing it.
   Visits each channel page, extracts subscriber count, updates the lead.
   """
-  def run_enrich_subscribers(job_id) do
+  def run_enrich_subscribers(job_id, run_id \\ nil) do
     missing = Leads.list_leads_missing_subscribers(job_id)
 
     if missing == [] do
       Logger.info("Job #{job_id}: no leads missing subscriber_count")
+      if run_id, do: EnrichmentRuns.complete(run_id)
       {:ok, 0}
     else
       Logger.info("Job #{job_id}: backfilling subscriber_count for #{length(missing)} leads")
@@ -148,10 +150,26 @@ defmodule LeadResearcher.Crawler.Runner do
           case Leads.backfill_subscriber_count(lead_id, subscriber_count) do
             {:ok, _} ->
               :counters.add(count_ref, 1, 1)
+              if run_id, do: EnrichmentRuns.increment_processed(run_id)
               Logger.info("Backfilled lead #{lead_id}: #{subscriber_count} subscribers")
 
             {:error, reason} ->
+              if run_id, do: EnrichmentRuns.increment_failed(run_id)
               Logger.warning("Failed to backfill lead #{lead_id}: #{inspect(reason)}")
+          end
+        end,
+        on_subscriber_failure: fn data ->
+          lead_id = data["lead_id"]
+          reason = data["failure_reason"]
+
+          case Leads.set_audience_failure_reason(lead_id, reason) do
+            {:ok, _} ->
+              if run_id, do: EnrichmentRuns.increment_failed(run_id)
+              Logger.info("Set failure reason for lead #{lead_id}: #{reason}")
+
+            {:error, err} ->
+              if run_id, do: EnrichmentRuns.increment_failed(run_id)
+              Logger.warning("Failed to set failure reason for lead #{lead_id}: #{inspect(err)}")
           end
         end,
         on_summary: fn summary ->
@@ -159,16 +177,20 @@ defmodule LeadResearcher.Crawler.Runner do
         end
       }
 
-      case Bridge.run(config, callbacks) do
+      result = case Bridge.run(config, callbacks) do
         :ok ->
           updated = :counters.get(count_ref, 1)
           Logger.info("Job #{job_id}: subscriber backfill done. #{updated} leads updated.")
+          if run_id, do: EnrichmentRuns.complete(run_id)
           {:ok, updated}
 
         {:error, reason} ->
           Logger.error("Job #{job_id}: subscriber backfill failed: #{inspect(reason)}")
+          if run_id, do: EnrichmentRuns.mark_failed(run_id)
           {:error, reason}
       end
+
+      result
     end
   end
 
@@ -176,11 +198,12 @@ defmodule LeadResearcher.Crawler.Runner do
   Enrich leads in a job with channel page data (profile, tags, etc.).
   Visits each channel page, extracts enrichment data, saves to lead_enrichments.
   """
-  def run_enrich_channels(job_id) do
+  def run_enrich_channels(job_id, run_id \\ nil) do
     candidates = Leads.list_leads_for_enrichment(job_id)
 
     if candidates == [] do
       Logger.info("Job #{job_id}: no leads need enrichment")
+      if run_id, do: EnrichmentRuns.complete(run_id)
       {:ok, 0}
     else
       Logger.info("Job #{job_id}: enriching #{length(candidates)} leads")
@@ -206,9 +229,11 @@ defmodule LeadResearcher.Crawler.Runner do
           case Enrichments.auto_enrich(lead_id, data) do
             {:ok, _} ->
               :counters.add(count_ref, 1, 1)
+              if run_id, do: EnrichmentRuns.increment_processed(run_id)
               Logger.info("Enriched lead #{lead_id}")
 
             {:error, reason} ->
+              if run_id, do: EnrichmentRuns.increment_failed(run_id)
               Logger.warning("Failed to enrich lead #{lead_id}: #{inspect(reason)}")
           end
         end,
@@ -217,16 +242,20 @@ defmodule LeadResearcher.Crawler.Runner do
         end
       }
 
-      case Bridge.run(config, callbacks) do
+      result = case Bridge.run(config, callbacks) do
         :ok ->
           enriched = :counters.get(count_ref, 1)
           Logger.info("Job #{job_id}: channel enrichment done. #{enriched} leads enriched.")
+          if run_id, do: EnrichmentRuns.complete(run_id)
           {:ok, enriched}
 
         {:error, reason} ->
           Logger.error("Job #{job_id}: channel enrichment failed: #{inspect(reason)}")
+          if run_id, do: EnrichmentRuns.mark_failed(run_id)
           {:error, reason}
       end
+
+      result
     end
   end
 

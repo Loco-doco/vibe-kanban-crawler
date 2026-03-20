@@ -2,10 +2,38 @@ import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
   CONTACT_READINESS_LABELS,
+  SUSPECT_REASON_LABELS,
   AUDIENCE_TIER_LABELS,
   AUDIENCE_DISPLAY_STATUS_LABELS,
+  AUDIENCE_FAILURE_REASON_LABELS,
   REVIEW_STATUS_LABELS,
 } from '../types'
+
+type ContactCategory = 'direct_contact' | 'shared_email' | 'platform_email' | 'needs_check'
+
+const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
+  direct_contact: '직접 연락 가능',
+  shared_email: '공용 메일',
+  platform_email: '플랫폼 메일 의심',
+  needs_check: '검증 필요',
+}
+
+const CONTACT_CATEGORY_VARIANTS: Record<ContactCategory, string> = {
+  direct_contact: 'positive',
+  shared_email: 'caution',
+  platform_email: 'warning',
+  needs_check: 'muted',
+}
+
+function deriveContactCategory(lead: Lead): ContactCategory {
+  if (lead.contact_readiness === 'contactable' || lead.contact_readiness === 'user_confirmed')
+    return 'direct_contact'
+  if (lead.contact_readiness === 'platform_suspect' && lead.suspect_reason) {
+    if (lead.suspect_reason.startsWith('prefix_')) return 'shared_email'
+    return 'platform_email'
+  }
+  return 'needs_check'
+}
 
 interface Props {
   leads: Lead[]
@@ -51,6 +79,7 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
             </th>
             <th>리드명</th>
             <th>이메일</th>
+            <th>이메일 상태</th>
             <th>플랫폼 / 영향력</th>
             <th>카테고리</th>
             <th>리뷰</th>
@@ -61,6 +90,7 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
           {leads.map(lead => {
             const action = getRecommendedAction(lead)
             const email = lead.contact_email || lead.email
+            const contactCat = deriveContactCategory(lead)
             return (
               <tr
                 key={lead.id}
@@ -75,15 +105,32 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                   />
                 </td>
                 <td className="col-name">
-                  {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
+                  <span className="lead-name-text">
+                    {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
+                  </span>
+                  {lead.channel_url && (
+                    <a
+                      href={lead.channel_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="channel-external-link"
+                      title={lead.channel_url}
+                      onClick={e => e.stopPropagation()}
+                    >{'\u2197'}</a>
+                  )}
                 </td>
                 <td className="col-email">
                   <span className="email-text" title={email || undefined}>
                     {truncateEmail(email)}
                   </span>
-                  {email && (
-                    <span className={`contact-mini-badge ${lead.contact_readiness}`}>
-                      {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
+                </td>
+                <td className="col-contact-category">
+                  <span className={`contact-category-badge ${CONTACT_CATEGORY_VARIANTS[contactCat]}`}>
+                    {CONTACT_CATEGORY_LABELS[contactCat]}
+                  </span>
+                  {lead.suspect_reason && (
+                    <span className="suspect-info-icon" title={SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}>
+                      {'\u24D8'}
                     </span>
                   )}
                 </td>
@@ -97,8 +144,13 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                       {lead.effective_audience_label || lead.effective_audience_size}
                     </span>
                   ) : (
-                    <span className={`audience-status ${lead.audience_display_status}`}>
-                      {AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                    <span
+                      className={`audience-status ${lead.audience_display_status}`}
+                      title={lead.audience_failure_reason ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason) : undefined}
+                    >
+                      {lead.audience_failure_reason
+                        ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason)
+                        : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
                     </span>
                   )}
                   {lead.effective_audience_tier && (

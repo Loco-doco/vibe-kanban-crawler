@@ -7,6 +7,7 @@ defmodule LeadResearcher.Leads do
   def list_leads(params \\ %{}) do
     Lead
     |> maybe_filter_job(params)
+    |> maybe_filter_action_queue(params)
     |> maybe_filter_platform(params)
     |> maybe_filter_status(params)
     |> maybe_filter_min_confidence(params)
@@ -141,6 +142,14 @@ defmodule LeadResearcher.Leads do
       subscriber_count: subscriber_count,
       audience_tier: tier
     })
+    |> Repo.update()
+  end
+
+  def set_audience_failure_reason(lead_id, reason) do
+    lead = Repo.get!(Lead, lead_id)
+
+    lead
+    |> Lead.changeset(%{audience_failure_reason: reason})
     |> Repo.update()
   end
 
@@ -287,6 +296,35 @@ defmodule LeadResearcher.Leads do
   end
 
   defp maybe_filter_has_email(query, _), do: query
+
+  # Action queue: compound filters for CRM work queues (Phase 6)
+  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_verification"}) do
+    where(query, [l], l.contact_readiness in ["platform_suspect", "needs_verification"])
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "contactable"}) do
+    where(query, [l], l.contact_readiness == "contactable" and l.review_status not in ["rejected", "auto_rejected"])
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_correction"}) do
+    where(
+      query,
+      [l],
+      l.review_status not in ["rejected", "auto_rejected"] and
+        ((l.platform in ["youtube", "instagram"] and is_nil(l.subscriber_count) and is_nil(l.audience_size_override)) or
+           l.enrichment_status in ["not_started", "failed"])
+    )
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "held"}) do
+    where(query, [l], l.review_status == "held")
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "excluded"}) do
+    where(query, [l], l.review_status in ["auto_rejected", "rejected"])
+  end
+
+  defp maybe_filter_action_queue(query, _), do: query
 
   defp maybe_search(query, %{"search" => search}) when is_binary(search) and search != "" do
     pattern = "%#{search}%"

@@ -10,6 +10,7 @@ import {
   EMAIL_STATUS_LABELS,
   AUDIENCE_TIER_LABELS,
   AUDIENCE_DISPLAY_STATUS_LABELS,
+  AUDIENCE_FAILURE_REASON_LABELS,
   ENRICHMENT_STATUS_LABELS,
   REVIEW_STATUS_LABELS,
   SOURCE_TYPE_LABELS,
@@ -277,15 +278,12 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
               <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
                 {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
               </span>
-            </div>
-            {lead.suspect_reason && (
-              <div className="drawer-field-readonly">
-                <span className="drawer-field-label">의심 사유</span>
-                <span className="drawer-field-value suspect-reason">
+              {lead.suspect_reason && (
+                <span className="suspect-detail-label">
                   {SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}
                 </span>
-              </div>
-            )}
+              )}
+            </div>
             <div className="drawer-field-readonly">
               <span className="drawer-field-label">이메일 상태</span>
               <span className={`email-status-badge ${lead.email_status}`}>
@@ -305,6 +303,11 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated }: Props) {
                   ? lead.effective_audience_label || `${lead.effective_audience_size}`
                   : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
               </span>
+              {lead.audience_failure_reason && (
+                <span className="suspect-detail-label">
+                  {AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason}
+                </span>
+              )}
             </div>
             <EditableField
               label="영향력 (수동 보정)"

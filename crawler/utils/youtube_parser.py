@@ -92,6 +92,38 @@ def extract_subscriber_count(html):
     return None
 
 
+def classify_subscriber_failure(html):
+    """Classify why subscriber count extraction failed.
+
+    Returns one of:
+    - fetch_failed: HTML was not retrieved
+    - login_required: page requires login/age verification
+    - page_structure_changed: ytInitialData not found
+    - parse_failed: data present but parsing failed
+    """
+    if not html:
+        return "fetch_failed"
+
+    # Check for login/age gate indicators
+    login_indicators = [
+        "accounts.google.com/signin",
+        "age-gate",
+        "og:restrictions:age",
+        "confirm your age",
+    ]
+    html_lower = html.lower()
+    for indicator in login_indicators:
+        if indicator.lower() in html_lower:
+            return "login_required"
+
+    # Check if ytInitialData exists at all
+    yt_data = extract_yt_initial_data(html)
+    if not yt_data:
+        return "page_structure_changed"
+
+    return "parse_failed"
+
+
 def extract_yt_initial_data(html):
     """Extract and parse ytInitialData JSON from YouTube HTML page.
 

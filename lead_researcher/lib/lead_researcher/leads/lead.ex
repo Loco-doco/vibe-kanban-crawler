@@ -32,6 +32,7 @@ defmodule LeadResearcher.Leads.Lead do
     field :audience_metric_type, :string, default: "unknown"
     field :audience_tier, :string
     field :audience_source, :string, default: "crawler"
+    field :audience_failure_reason, :string
 
     # User overrides (never overwrites raw fields above)
     field :display_name, :string
@@ -58,7 +59,7 @@ defmodule LeadResearcher.Leads.Lead do
     :notes, :raw_data, :job_id, :email_verified,
     :source_platform, :source_type, :source_url, :discovery_keyword, :discovery_keywords, :normalized_tags,
     :review_status, :master_sync_status,
-    :email_status, :audience_metric_type, :audience_tier, :audience_source,
+    :email_status, :audience_metric_type, :audience_tier, :audience_source, :audience_failure_reason,
     :display_name, :contact_email, :audience_size_override, :audience_tier_override,
     :contact_readiness, :suspect_reason,
     :enrichment_status

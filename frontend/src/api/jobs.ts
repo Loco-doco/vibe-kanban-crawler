@@ -28,14 +28,38 @@ export async function createSupplementaryJob(jobId: number, supplementaryType: S
   return data.data
 }
 
-export async function enrichSubscribers(jobId: number): Promise<{ status: string; job_id: number }> {
-  const { data } = await api.post<{ status: string; job_id: number }>(`/jobs/${jobId}/enrich-subscribers`)
+export interface EnrichmentRunResponse {
+  status: string
+  job_id: number
+  run_id: number
+}
+
+export interface EnrichmentRun {
+  id: number
+  job_id: number
+  run_type: 'subscribers' | 'channels'
+  status: 'running' | 'completed' | 'failed'
+  total: number
+  processed: number
+  updated: number
+  failed: number
+  inserted_at: string
+  updated_at: string
+}
+
+export async function enrichSubscribers(jobId: number): Promise<EnrichmentRunResponse> {
+  const { data } = await api.post<EnrichmentRunResponse>(`/jobs/${jobId}/enrich-subscribers`)
   return data
 }
 
-export async function enrichChannels(jobId: number): Promise<{ status: string; job_id: number }> {
-  const { data } = await api.post<{ status: string; job_id: number }>(`/jobs/${jobId}/enrich-channels`)
+export async function enrichChannels(jobId: number): Promise<EnrichmentRunResponse> {
+  const { data } = await api.post<EnrichmentRunResponse>(`/jobs/${jobId}/enrich-channels`)
   return data
+}
+
+export async function getEnrichmentRun(runId: number): Promise<EnrichmentRun> {
+  const { data } = await api.get<{ data: EnrichmentRun }>(`/enrichment-runs/${runId}`)
+  return data.data
 }
 
 export interface ParsedPrompt {

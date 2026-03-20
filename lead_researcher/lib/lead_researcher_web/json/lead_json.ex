@@ -46,6 +46,7 @@ defmodule LeadResearcherWeb.LeadJSON do
       enrichment_status: lead.enrichment_status || "not_started",
       contact_readiness: lead.contact_readiness || "needs_verification",
       suspect_reason: lead.suspect_reason,
+      audience_failure_reason: lead.audience_failure_reason,
       # Computed effective values (user override > raw)
       effective_name: lead.display_name || lead.channel_name,
       effective_email: lead.contact_email || lead.email,

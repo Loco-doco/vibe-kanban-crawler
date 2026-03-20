@@ -26,7 +26,7 @@ from scrapers.instagram import InstagramScraper
 from scrapers.generic import GenericScraper
 from scrapers.youtube_discovery import YouTubeDiscoveryScraper
 from utils.url_utils import classify_url, normalize_url
-from utils.youtube_parser import extract_subscriber_count
+from utils.youtube_parser import extract_subscriber_count, classify_subscriber_failure
 from utils.http_client import fetch_with_retry
 
 
@@ -314,13 +314,38 @@ def run_enrich_subscribers(config, crawler_config):
                     )
                     updated += 1
                 else:
-                    log(f"No subscriber count found for lead {lead_id}")
+                    failure_reason = classify_subscriber_failure(html)
+                    log(f"No subscriber count found for lead {lead_id}: {failure_reason}")
+                    print(
+                        json.dumps({
+                            "type": "subscriber_failure",
+                            "lead_id": lead_id,
+                            "failure_reason": failure_reason,
+                        }),
+                        flush=True,
+                    )
                     failed += 1
             else:
                 log(f"Failed to fetch channel page for lead {lead_id}")
+                print(
+                    json.dumps({
+                        "type": "subscriber_failure",
+                        "lead_id": lead_id,
+                        "failure_reason": "fetch_failed",
+                    }),
+                    flush=True,
+                )
                 failed += 1
         except Exception as e:
             error(f"Error processing lead {lead_id}: {str(e)}")
+            print(
+                json.dumps({
+                    "type": "subscriber_failure",
+                    "lead_id": lead_id,
+                    "failure_reason": "fetch_failed",
+                }),
+                flush=True,
+            )
             failed += 1
 
         # Rate limiting between requests

@@ -49,10 +49,12 @@ defmodule LeadResearcher.Quality do
       contactable_leads: contactable,
       platform_suspect_leads: platform_suspect,
       no_email_leads: no_email_leads,
-      # Action-oriented metrics (UX-3 / P3)
+      # Action-oriented metrics (UX-3 / P3 / Phase 6)
       needs_review_leads: Enum.count(leads, &(&1.review_status == "needs_review")),
+      needs_verification_leads: Enum.count(leads, &(&1.contact_readiness in ["platform_suspect", "needs_verification"])),
       needs_correction_leads: Enum.count(leads, fn l ->
-        (not has_effective_audience?(l)) or l.enrichment_status == "not_started"
+        l.review_status not in ["rejected", "auto_rejected"] and
+          ((not has_effective_audience?(l)) or l.enrichment_status in ["not_started", "failed"])
       end),
       excluded_leads: Enum.count(leads, &(&1.review_status in ["auto_rejected", "rejected"]))
     }

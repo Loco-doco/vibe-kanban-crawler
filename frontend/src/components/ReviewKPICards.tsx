@@ -2,33 +2,30 @@ import type { QualityMetrics } from '../types'
 
 interface Props {
   quality: QualityMetrics
-  activeFilter?: string
-  onFilterClick?: (filter: string) => void
 }
 
-export default function ReviewKPICards({ quality, activeFilter, onFilterClick }: Props) {
+export default function ReviewKPICards({ quality }: Props) {
   const pct = (val: number) => `${Math.round(val * 100)}%`
 
   const cards = [
-    { key: '', label: '전체', value: quality.total_leads, variant: '' },
-    { key: 'contactable', label: '직접 연락 가능', value: quality.contactable_leads, variant: 'positive' },
-    { key: 'needs_review', label: '검토 대상', value: quality.needs_review_leads, variant: 'warning' },
-    { key: 'needs_correction', label: '보정 대상', value: quality.needs_correction_leads, variant: 'info' },
-    { key: 'excluded', label: '제외 후보', value: quality.excluded_leads, variant: 'muted' },
+    { label: '전체 리드', value: quality.total_leads, variant: '' },
+    { label: '바로 연락 가능', value: quality.contactable_leads, variant: 'positive' },
+    { label: '검증 필요', value: quality.needs_verification_leads, variant: 'warning' },
+    { label: '데이터 보정 필요', value: quality.needs_correction_leads, variant: 'info' },
+    { label: '제외됨', value: quality.excluded_leads, variant: 'muted' },
   ]
 
   return (
     <div className="review-kpi-section">
       <div className="review-kpi-grid">
         {cards.map(card => (
-          <button
-            key={card.key}
-            className={`review-kpi-card${card.variant ? ` action-card ${card.variant}` : ''}${activeFilter === card.key ? ' active' : ''}`}
-            onClick={() => onFilterClick?.(card.key)}
+          <div
+            key={card.label}
+            className={`review-kpi-card summary-only${card.variant ? ` ${card.variant}` : ''}`}
           >
             <span className="review-kpi-value">{card.value}</span>
             <span className="review-kpi-label">{card.label}</span>
-          </button>
+          </div>
         ))}
       </div>
       <div className="review-kpi-sub">

@@ -1,10 +1,12 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getJobs, enrichSubscribers, enrichChannels } from '../api/jobs'
+import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
+import type { EnrichmentRun } from '../api/jobs'
 import { getLeads, getQuality, bulkReview } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
 import QualityBanner from './QualityBanner'
+import FilterStatusBar from './FilterStatusBar'
 import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
 import LeadDetailDrawer from './LeadDetailDrawer'
@@ -19,21 +21,46 @@ const FINISHED_STATUSES = ['completed', 'completed_low_yield', 'failed', 'cancel
 
 type EnrichState = 'idle' | 'running' | 'done' | 'error'
 
+// L1 Primary queue — the only mechanism that changes the result set
+type ActionQueue = 'needs_verification' | 'contactable' | 'needs_correction' | 'held' | 'excluded'
+
+const QUEUE_TABS: { value: ActionQueue; label: string }[] = [
+  { value: 'needs_verification', label: '검증 필요' },
+  { value: 'contactable', label: '연락 대상' },
+  { value: 'needs_correction', label: '데이터 보정 필요' },
+  { value: 'held', label: '보류' },
+  { value: 'excluded', label: '제외' },
+]
+
+const QUEUE_LABELS: Record<ActionQueue, string> = {
+  needs_verification: '검증 필요',
+  contactable: '연락 대상',
+  needs_correction: '데이터 보정 필요',
+  held: '보류',
+  excluded: '제외',
+}
+
 export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId ?? null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
+
+  // L1 Primary queue (default: 검증 필요)
+  const [activeQueue, setActiveQueue] = useState<ActionQueue>('needs_verification')
+
+  // L2 Secondary filters (search text preserved across tab switches; dropdowns reset)
   const [searchText, setSearchText] = useState('')
   const [contactReadinessFilter, setContactReadinessFilter] = useState('')
-  const [reviewStatusFilter, setReviewStatusFilter] = useState('needs_review')
   const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('')
   const [audienceTierFilter, setAudienceTierFilter] = useState('')
+
   const [supplementModalType, setSupplementModalType] = useState<SupplementaryType | null>(null)
-  const [activeKPIFilter, setActiveKPIFilter] = useState<string>('needs_review')
 
   // CTA states
   const [subscriberEnrichState, setSubscriberEnrichState] = useState<EnrichState>('idle')
   const [channelEnrichState, setChannelEnrichState] = useState<EnrichState>('idle')
+  const [subscriberRunId, setSubscriberRunId] = useState<number | null>(null)
+  const [channelRunId, setChannelRunId] = useState<number | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -44,27 +71,55 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   // Auto-select first job
   const activeJobId = selectedJobId ?? (finishedJobs.length > 0 ? finishedJobs[0].id : null)
 
-  // Leads
+  // Leads — L1 primary queue via action_queue param, L2 secondary via additional params
   const { data: leads, isLoading: leadsLoading } = useQuery({
-    queryKey: ['leads', { job_id: activeJobId, search: searchText, contact_readiness: contactReadinessFilter, review_status: reviewStatusFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
+    queryKey: ['leads', { job_id: activeJobId, action_queue: activeQueue, search: searchText, contact_readiness: contactReadinessFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
     queryFn: () => getLeads({
       job_id: activeJobId!,
+      action_queue: activeQueue,
       limit: 500,
       ...(searchText ? { search: searchText } : {}),
       ...(contactReadinessFilter ? { contact_readiness: contactReadinessFilter } : {}),
-      ...(reviewStatusFilter ? { review_status: reviewStatusFilter } : {}),
       ...(enrichmentStatusFilter ? { enrichment_status: enrichmentStatusFilter } : {}),
       ...(audienceTierFilter ? { audience_tier: audienceTierFilter } : {}),
     }),
     enabled: activeJobId !== null,
   })
 
-  // Quality
+  // Quality (always job-level, not affected by filters)
   const { data: quality } = useQuery({
     queryKey: ['quality', activeJobId],
     queryFn: () => getQuality(activeJobId!),
     enabled: activeJobId !== null,
   })
+
+  // Enrichment run polling
+  const { data: subscriberRun } = useQuery({
+    queryKey: ['enrichment-run', subscriberRunId],
+    queryFn: () => getEnrichmentRun(subscriberRunId!),
+    enabled: subscriberRunId !== null && subscriberEnrichState === 'running',
+    refetchInterval: 3000,
+  })
+
+  const { data: channelRun } = useQuery({
+    queryKey: ['enrichment-run', channelRunId],
+    queryFn: () => getEnrichmentRun(channelRunId!),
+    enabled: channelRunId !== null && channelEnrichState === 'running',
+    refetchInterval: 3000,
+  })
+
+  // Auto-complete enrichment states when runs finish
+  if (subscriberRun && subscriberRun.status !== 'running' && subscriberEnrichState === 'running') {
+    setSubscriberEnrichState(subscriberRun.status === 'completed' ? 'done' : 'error')
+    queryClient.invalidateQueries({ queryKey: ['leads'] })
+    queryClient.invalidateQueries({ queryKey: ['quality'] })
+  }
+
+  if (channelRun && channelRun.status !== 'running' && channelEnrichState === 'running') {
+    setChannelEnrichState(channelRun.status === 'completed' ? 'done' : 'error')
+    queryClient.invalidateQueries({ queryKey: ['leads'] })
+    queryClient.invalidateQueries({ queryKey: ['quality'] })
+  }
 
   // Bulk review mutation
   const bulkMutation = useMutation({
@@ -76,21 +131,71 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     },
   })
 
-  // Derive drawer lead from fresh query data (not stale snapshot)
+  // Derive drawer lead from fresh query data
   const drawerLead = drawerLeadId && leads ? leads.find(l => l.id === drawerLeadId) ?? null : null
+
+  // Derive queue total from quality metrics (job-level, before secondary filters)
+  const queueTotal = useMemo(() => {
+    if (!quality) return 0
+    switch (activeQueue) {
+      case 'needs_verification': return quality.needs_verification_leads
+      case 'contactable': return quality.contactable_leads
+      case 'needs_correction': return quality.needs_correction_leads
+      case 'excluded': return quality.excluded_leads
+      default: return quality.total_leads
+    }
+  }, [quality, activeQueue])
+
+  // Derive active secondary filters for FilterStatusBar
+  const secondaryFilters = useMemo(() => {
+    const filters: { label: string }[] = []
+    if (searchText) filters.push({ label: `"${searchText}"` })
+    if (contactReadinessFilter) {
+      const labels: Record<string, string> = { contactable: '연락 가능', platform_suspect: '플랫폼 메일 의심', no_email: '이메일 없음', needs_verification: '검증 필요', user_confirmed: '사용자 확인' }
+      filters.push({ label: labels[contactReadinessFilter] || contactReadinessFilter })
+    }
+    if (enrichmentStatusFilter) {
+      const labels: Record<string, string> = { not_started: '미시작', completed: '완료', low_confidence: '신뢰도 낮음' }
+      filters.push({ label: labels[enrichmentStatusFilter] || enrichmentStatusFilter })
+    }
+    if (audienceTierFilter) {
+      filters.push({ label: `${audienceTierFilter.charAt(0).toUpperCase() + audienceTierFilter.slice(1)} 규모` })
+    }
+    return filters
+  }, [searchText, contactReadinessFilter, enrichmentStatusFilter, audienceTierFilter])
+
+  // Tab switch: reset dropdowns, keep search text
+  const handleQueueChange = useCallback((queue: ActionQueue) => {
+    setActiveQueue(queue)
+    setSelectedLeadIds(new Set())
+    setDrawerLeadId(null)
+    // L2 dropdowns reset, search text preserved
+    setContactReadinessFilter('')
+    setEnrichmentStatusFilter('')
+    setAudienceTierFilter('')
+  }, [])
+
+  // Clear all secondary filters (including search)
+  const handleClearSecondaryFilters = useCallback(() => {
+    setSearchText('')
+    setContactReadinessFilter('')
+    setEnrichmentStatusFilter('')
+    setAudienceTierFilter('')
+  }, [])
 
   const handleSelectJob = useCallback((jobId: number) => {
     setSelectedJobId(jobId)
     setSelectedLeadIds(new Set())
     setDrawerLeadId(null)
     setSearchText('')
+    setActiveQueue('needs_verification')
     setContactReadinessFilter('')
-    setReviewStatusFilter('needs_review')
     setEnrichmentStatusFilter('')
     setAudienceTierFilter('')
-    setActiveKPIFilter('needs_review')
     setSubscriberEnrichState('idle')
     setChannelEnrichState('idle')
+    setSubscriberRunId(null)
+    setChannelRunId(null)
   }, [])
 
   const handleToggleSelect = useCallback((id: number) => {
@@ -137,63 +242,48 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     if (!activeJobId || subscriberEnrichState === 'running') return
     setSubscriberEnrichState('running')
     try {
-      await enrichSubscribers(activeJobId)
-      setSubscriberEnrichState('done')
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      const resp = await enrichSubscribers(activeJobId)
+      setSubscriberRunId(resp.run_id)
     } catch {
       setSubscriberEnrichState('error')
     }
-  }, [activeJobId, subscriberEnrichState, queryClient])
+  }, [activeJobId, subscriberEnrichState])
 
   const handleEnrichChannels = useCallback(async () => {
     if (!activeJobId || channelEnrichState === 'running') return
     setChannelEnrichState('running')
     try {
-      await enrichChannels(activeJobId)
-      setChannelEnrichState('done')
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      const resp = await enrichChannels(activeJobId)
+      setChannelRunId(resp.run_id)
     } catch {
       setChannelEnrichState('error')
     }
-  }, [activeJobId, channelEnrichState, queryClient])
+  }, [activeJobId, channelEnrichState])
 
-  const handleKPIFilterClick = useCallback((filter: string) => {
-    setActiveKPIFilter(filter)
-    // Reset all filters then apply KPI-specific filter
-    setContactReadinessFilter('')
-    setEnrichmentStatusFilter('')
-    setAudienceTierFilter('')
-
-    if (filter === 'needs_review') {
-      setReviewStatusFilter('needs_review')
-    } else if (filter === 'excluded') {
-      setReviewStatusFilter('auto_rejected')
-    } else if (filter === 'contactable') {
-      setReviewStatusFilter('')
-      setContactReadinessFilter('contactable')
-    } else if (filter === 'needs_correction') {
-      setReviewStatusFilter('')
-      setEnrichmentStatusFilter('not_started')
-    } else {
-      // 전체
-      setReviewStatusFilter('')
-    }
-  }, [])
-
-  // Derive subscriber/channel enrich disabled reasons
+  // Derive subscriber/channel enrich disabled reasons + progress
   const subscriberDisabledReason = (() => {
-    if (subscriberEnrichState === 'running') return '실행 중...'
-    if (subscriberEnrichState === 'done') return '완료됨'
+    if (subscriberEnrichState === 'running') {
+      if (subscriberRun) return `${subscriberRun.processed}/${subscriberRun.total} 처리 중...`
+      return '실행 중...'
+    }
+    if (subscriberEnrichState === 'done') {
+      if (subscriberRun) return `완료: ${subscriberRun.updated}건 보정, ${subscriberRun.failed}건 실패`
+      return '완료됨'
+    }
     if (!quality) return null
     if (quality.audience_coverage_rate >= 1.0) return '보정 대상 없음'
     return null
   })()
 
   const channelDisabledReason = (() => {
-    if (channelEnrichState === 'running') return '실행 중...'
-    if (channelEnrichState === 'done') return '완료됨'
+    if (channelEnrichState === 'running') {
+      if (channelRun) return `${channelRun.processed}/${channelRun.total} 처리 중...`
+      return '실행 중...'
+    }
+    if (channelEnrichState === 'done') {
+      if (channelRun) return `완료: ${channelRun.updated}건 보강, ${channelRun.failed}건 실패`
+      return '완료됨'
+    }
     if (!quality) return null
     if (quality.enrichment_coverage_rate >= 1.0) return '보강 대상 없음'
     return null
@@ -218,14 +308,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
           </div>
         ) : (
           <>
-            {/* KPI Cards */}
-            {quality && (
-              <ReviewKPICards
-                quality={quality}
-                activeFilter={activeKPIFilter}
-                onFilterClick={handleKPIFilterClick}
-              />
-            )}
+            {/* L0: KPI Cards — summary only, not clickable */}
+            {quality && <ReviewKPICards quality={quality} />}
 
             {/* Quality Banner with CTA states */}
             {quality && (
@@ -241,31 +325,30 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               />
             )}
 
-            {/* Queue Tabs — uses different labels from KPI cards */}
+            {/* L1: Work Queue Tabs — primary queue, mutually exclusive */}
             <div className="review-queue-tabs">
-              {[
-                { value: '', label: '전체' },
-                { value: 'needs_review', label: '검토 큐' },
-                { value: 'auto_approved', label: '자동 승인' },
-                { value: 'auto_rejected', label: '자동 제외' },
-                { value: 'approved', label: '수동 승인' },
-                { value: 'rejected', label: '수동 제외' },
-                { value: 'held', label: '보류' },
-              ].map(tab => (
+              {QUEUE_TABS.map(tab => (
                 <button
                   key={tab.value}
-                  className={`queue-tab${reviewStatusFilter === tab.value ? ' active' : ''}`}
-                  onClick={() => {
-                    setReviewStatusFilter(tab.value)
-                    setActiveKPIFilter('')
-                  }}
+                  className={`queue-tab${activeQueue === tab.value ? ' active' : ''}`}
+                  onClick={() => handleQueueChange(tab.value)}
                 >
                   {tab.label}
+                  {quality && (
+                    <span className="queue-tab-count">
+                      {tab.value === 'needs_verification' ? quality.needs_verification_leads
+                        : tab.value === 'contactable' ? quality.contactable_leads
+                        : tab.value === 'needs_correction' ? quality.needs_correction_leads
+                        : tab.value === 'held' ? quality.needs_review_leads
+                        : tab.value === 'excluded' ? quality.excluded_leads
+                        : 0}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
 
-            {/* Filter Bar */}
+            {/* L2: Secondary Filter Bar */}
             <div className="review-filter-bar">
               <input
                 type="text"
@@ -310,6 +393,15 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               </select>
             </div>
 
+            {/* Filter Status Bar */}
+            <FilterStatusBar
+              queueLabel={QUEUE_LABELS[activeQueue]}
+              secondaryFilters={secondaryFilters}
+              totalInQueue={queueTotal}
+              filteredCount={leads?.length ?? 0}
+              onClearFilters={handleClearSecondaryFilters}
+            />
+
             {/* Bulk Actions */}
             <BulkActions
               selectedCount={selectedLeadIds.size}
@@ -323,7 +415,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
             ) : !leads?.length ? (
               <div className="empty-state">
                 <span className="empty-state-icon">{'\u{1F50D}'}</span>
-                <h3>수집된 리드가 없습니다</h3>
+                <h3>해당 큐에 리드가 없습니다</h3>
               </div>
             ) : (
               <ReviewTable

@@ -10,6 +10,7 @@ export type ContactReadiness = 'contactable' | 'no_email' | 'platform_suspect' |
 export type EnrichmentStatus = 'not_started' | 'completed' | 'low_confidence' | 'failed'
 export type QualityJudgment = 'healthy' | 'low_email_coverage' | 'high_invalid_email_rate' | 'low_audience_coverage'
 export type SupplementaryType = 'email_supplement' | 'audience_supplement' | 'meta_supplement'
+export type AudienceFailureReason = 'fetch_failed' | 'parse_failed' | 'login_required' | 'unsupported_platform' | 'page_structure_changed' | 'rate_limited'
 
 export interface Job {
   id: number
@@ -114,6 +115,7 @@ export interface Lead {
   enrichment_status: EnrichmentStatus
   contact_readiness: ContactReadiness
   suspect_reason: string | null
+  audience_failure_reason: AudienceFailureReason | null
   // Computed effective values
   effective_name: string | null
   effective_email: string | null
@@ -148,6 +150,7 @@ export interface QualityMetrics {
   platform_suspect_leads: number
   no_email_leads: number
   needs_review_leads: number
+  needs_verification_leads: number
   needs_correction_leads: number
   excluded_leads: number
 }
@@ -315,6 +318,15 @@ export const AUDIENCE_DISPLAY_STATUS_LABELS: Record<string, string> = {
   collected: '',
   not_collected: '미수집',
   not_applicable: '해당 없음',
+}
+
+export const AUDIENCE_FAILURE_REASON_LABELS: Record<string, string> = {
+  fetch_failed: '페이지 로딩 실패',
+  parse_failed: '구독자 수 파싱 실패',
+  login_required: '로그인 필요',
+  unsupported_platform: '미지원 플랫폼',
+  page_structure_changed: '페이지 구조 변경',
+  rate_limited: '요청 제한',
 }
 
 export const QUALITY_JUDGMENT_LABELS: Record<string, string> = {

@@ -15,6 +15,7 @@ defmodule LeadResearcherWeb.Router do
     post "/jobs/:id/supplement", JobController, :supplement
     post "/jobs/:id/enrich-subscribers", JobController, :enrich_subscribers
     post "/jobs/:id/enrich-channels", JobController, :enrich_channels
+    get "/enrichment-runs/:id", JobController, :enrichment_run_status
     post "/parse-prompt", JobController, :parse_prompt
 
     get "/leads/export/csv", LeadController, :export_csv

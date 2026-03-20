@@ -2,6 +2,8 @@ defmodule LeadResearcherWeb.JobController do
   use LeadResearcherWeb, :controller
 
   alias LeadResearcher.Jobs
+  alias LeadResearcher.Leads
+  alias LeadResearcher.Enrichments.EnrichmentRuns
 
   def index(conn, params) do
     jobs = Jobs.list_jobs(params)
@@ -58,22 +60,59 @@ defmodule LeadResearcherWeb.JobController do
 
   def enrich_subscribers(conn, %{"id" => id}) do
     job_id = String.to_integer(id)
+    total = length(Leads.list_leads_missing_subscribers(job_id))
 
-    Task.start(fn ->
-      LeadResearcher.Crawler.Runner.run_enrich_subscribers(job_id)
-    end)
+    case EnrichmentRuns.create(job_id, "subscribers", total) do
+      {:ok, run} ->
+        run_id = run.id
 
-    json(conn, %{status: "started", job_id: job_id})
+        Task.start(fn ->
+          LeadResearcher.Crawler.Runner.run_enrich_subscribers(job_id, run_id)
+        end)
+
+        json(conn, %{status: "started", job_id: job_id, run_id: run_id})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "failed to create run"})
+    end
   end
 
   def enrich_channels(conn, %{"id" => id}) do
     job_id = String.to_integer(id)
+    total = length(Leads.list_leads_for_enrichment(job_id))
 
-    Task.start(fn ->
-      LeadResearcher.Crawler.Runner.run_enrich_channels(job_id)
-    end)
+    case EnrichmentRuns.create(job_id, "channels", total) do
+      {:ok, run} ->
+        run_id = run.id
 
-    json(conn, %{status: "started", job_id: job_id})
+        Task.start(fn ->
+          LeadResearcher.Crawler.Runner.run_enrich_channels(job_id, run_id)
+        end)
+
+        json(conn, %{status: "started", job_id: job_id, run_id: run_id})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "failed to create run"})
+    end
+  end
+
+  def enrichment_run_status(conn, %{"id" => id}) do
+    run = EnrichmentRuns.get!(String.to_integer(id))
+
+    json(conn, %{
+      data: %{
+        id: run.id,
+        job_id: run.job_id,
+        run_type: run.run_type,
+        status: run.status,
+        total: run.total,
+        processed: run.processed,
+        updated: run.updated,
+        failed: run.failed,
+        inserted_at: run.inserted_at,
+        updated_at: run.updated_at
+      }
+    })
   end
 
   def cancel(conn, %{"id" => id}) do

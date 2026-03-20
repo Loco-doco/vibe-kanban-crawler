@@ -22,6 +22,7 @@ defmodule LeadResearcher.Crawler.Bridge do
     - :on_lead — fn(lead_data) for each lead
     - :on_summary — fn(summary_data) when crawler emits summary
     - :on_subscriber_update — fn(update_data) for subscriber backfill results
+    - :on_subscriber_failure — fn(failure_data) for subscriber extraction failures
     - :on_enrichment — fn(enrichment_data) for channel enrichment results
   """
   def run(config, callbacks) when is_map(config) and is_map(callbacks) do
@@ -89,6 +90,9 @@ defmodule LeadResearcher.Crawler.Bridge do
         {:subscriber_update, data} ->
           if cb = callbacks[:on_subscriber_update], do: cb.(data)
 
+        {:subscriber_failure, data} ->
+          if cb = callbacks[:on_subscriber_failure], do: cb.(data)
+
         {:enrichment, data} ->
           if cb = callbacks[:on_enrichment], do: cb.(data)
 
@@ -119,6 +123,9 @@ defmodule LeadResearcher.Crawler.Bridge do
 
       {:ok, %{"type" => "subscriber_update"} = data} ->
         {:subscriber_update, data}
+
+      {:ok, %{"type" => "subscriber_failure"} = data} ->
+        {:subscriber_failure, data}
 
       {:ok, %{"type" => "enrichment"} = data} ->
         {:enrichment, data}

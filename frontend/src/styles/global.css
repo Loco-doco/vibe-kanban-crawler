@@ -2185,28 +2185,19 @@ body {
   border-radius: var(--radius-sm);
   padding: 12px;
   text-align: center;
-  cursor: pointer;
   font-family: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.review-kpi-card:hover {
-  border-color: var(--primary-500);
-  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.12);
+/* Summary-only cards: non-clickable, no hover/active states */
+.review-kpi-card.summary-only {
+  cursor: default;
+  user-select: none;
 }
 
-.review-kpi-card.active {
-  border-color: var(--primary-600);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-  background: #f5f3ff;
-}
-
-.review-kpi-card.action-card.positive .review-kpi-value { color: var(--success-dark); }
-.review-kpi-card.action-card.warning .review-kpi-value { color: var(--warning); }
-.review-kpi-card.action-card.info .review-kpi-value { color: var(--info); }
-.review-kpi-card.action-card.muted .review-kpi-value { color: var(--gray-400); }
-
-.review-kpi-card.warning { border-color: var(--warning); }
+.review-kpi-card.summary-only.positive .review-kpi-value { color: var(--success-dark); }
+.review-kpi-card.summary-only.warning .review-kpi-value { color: var(--warning); }
+.review-kpi-card.summary-only.info .review-kpi-value { color: var(--info); }
+.review-kpi-card.summary-only.muted .review-kpi-value { color: var(--gray-400); }
 
 .review-kpi-value {
   display: block;
@@ -2336,8 +2327,39 @@ body {
 .review-row.selected { background: #eef2ff; }
 
 .col-check { width: 30px; text-align: center; }
-.col-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-name { max-width: 160px; white-space: nowrap; }
+.col-name .lead-name-text { overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 130px; vertical-align: middle; }
+.channel-external-link {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  text-decoration: none;
+  vertical-align: middle;
+  transition: color 0.15s;
+}
+.channel-external-link:hover { color: var(--primary-600); }
 .col-email { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-contact-category { white-space: nowrap; }
+.contact-category-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.contact-category-badge.positive { background: var(--success-light); color: var(--success-dark); }
+.contact-category-badge.caution { background: #fef3c7; color: #92400e; }
+.contact-category-badge.warning { background: var(--danger-light); color: var(--danger); }
+.contact-category-badge.muted { background: var(--gray-100); color: var(--gray-500); }
+.suspect-info-icon {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.7rem;
+  color: var(--gray-400);
+  cursor: help;
+  vertical-align: middle;
+}
 .col-keyword { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-time { white-space: nowrap; font-size: 0.72rem; color: var(--gray-400); }
 .col-audience { white-space: nowrap; }
@@ -2375,6 +2397,7 @@ body {
 .contact-readiness-badge.user_confirmed { background: var(--info); color: white; }
 
 .suspect-reason { color: #92400e; font-size: 0.75rem; font-style: italic; }
+.suspect-detail-label { display: block; margin-top: 2px; font-size: 0.72rem; color: #92400e; font-style: italic; }
 
 /* Audience display */
 .audience-value { font-weight: 500; color: var(--gray-800); }
@@ -2945,6 +2968,72 @@ body {
 .queue-tab.active {
   color: var(--primary-600);
   border-bottom-color: var(--primary-600);
+}
+
+.queue-tab-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.queue-tab.active .queue-tab-count {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary-600);
+}
+
+/* ===== Filter Status Bar ===== */
+.filter-status-bar {
+  padding: 8px 16px;
+  font-size: 0.78rem;
+  color: var(--gray-600);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-status-bar .queue-label {
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.filter-status-bar .separator {
+  color: var(--gray-300);
+}
+
+.filter-status-bar .filter-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 0.73rem;
+}
+
+.filter-status-bar .result-count {
+  margin-left: auto;
+  color: var(--gray-500);
+}
+
+.filter-status-bar .clear-filters-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--gray-600);
+  font-size: 0.73rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.filter-status-bar .clear-filters-btn:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-400);
 }
 
 /* ===== Judgment Panel (UX-3) ===== */

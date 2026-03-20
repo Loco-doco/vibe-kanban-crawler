@@ -3,12 +3,14 @@ import type { Lead, QualityMetrics, EditHistoryEntry, ReviewStatus } from '../ty
 
 interface LeadParams {
   job_id?: number
+  action_queue?: string
   platform?: string
   status?: string
   search?: string
   has_email?: string
   min_confidence?: string
   email_status?: string
+  contact_readiness?: string
   review_status?: string
   enrichment_status?: string
   audience_tier?: string
