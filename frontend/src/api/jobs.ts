@@ -69,6 +69,9 @@ export interface ParsedPrompt {
   subscriber_max: number | null
   extra_conditions: string | null
   parse_mode?: string
+  raw_prompt: string
+  platform_hints: string[]
+  semantic_expansions: string[]
 }
 
 export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {

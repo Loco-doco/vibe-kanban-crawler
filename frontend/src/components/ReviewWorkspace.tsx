@@ -9,6 +9,7 @@ import QualityBanner from './QualityBanner'
 import FilterStatusBar from './FilterStatusBar'
 import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
+import type { BulkResult } from './BulkActions'
 import LeadDetailDrawer from './LeadDetailDrawer'
 import LeadFullDetail from './LeadFullDetail'
 import SupplementarySearchModal from './SupplementarySearchModal'
@@ -50,12 +51,16 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   // L1 Primary queue (default: 검증 필요)
   const [activeQueue, setActiveQueue] = useState<ActionQueue>('needs_verification')
 
+  // Sort (default: priority_score desc = 추천순)
+  const [sortField, setSortField] = useState<string>('priority_score')
+
   // L2 Secondary filters (search text preserved across tab switches; dropdowns reset)
   const [searchText, setSearchText] = useState('')
   const [contactReadinessFilter, setContactReadinessFilter] = useState('')
   const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('')
   const [audienceTierFilter, setAudienceTierFilter] = useState('')
 
+  const [lastBulkResult, setLastBulkResult] = useState<BulkResult | null>(null)
   const [supplementModalType, setSupplementModalType] = useState<SupplementaryType | null>(null)
 
   // CTA states
@@ -75,10 +80,11 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
 
   // Leads — L1 primary queue via action_queue param, L2 secondary via additional params
   const { data: leads, isLoading: leadsLoading } = useQuery({
-    queryKey: ['leads', { job_id: activeJobId, action_queue: activeQueue, search: searchText, contact_readiness: contactReadinessFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
+    queryKey: ['leads', { job_id: activeJobId, action_queue: activeQueue, sort: sortField, search: searchText, contact_readiness: contactReadinessFilter, enrichment_status: enrichmentStatusFilter, audience_tier: audienceTierFilter }],
     queryFn: () => getLeads({
       job_id: activeJobId!,
       action_queue: activeQueue,
+      sort: sortField,
       limit: 500,
       ...(searchText ? { search: searchText } : {}),
       ...(contactReadinessFilter ? { contact_readiness: contactReadinessFilter } : {}),
@@ -126,10 +132,12 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   // Bulk review mutation
   const bulkMutation = useMutation({
     mutationFn: ({ ids, status }: { ids: number[]; status: ReviewStatus }) => bulkReview(ids, status),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['quality'] })
+      setLastBulkResult({ action: variables.status, count: variables.ids.length })
       setSelectedLeadIds(new Set())
+      setTimeout(() => setLastBulkResult(null), 4000)
     },
   })
 
@@ -394,6 +402,15 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
                 <option value="macro">Macro</option>
                 <option value="mega">Mega</option>
               </select>
+              <select
+                className="review-filter-select review-sort-select"
+                value={sortField}
+                onChange={e => setSortField(e.target.value)}
+              >
+                <option value="priority_score">추천순</option>
+                <option value="inserted_at">최신순</option>
+                <option value="subscriber_count">영향력순</option>
+              </select>
             </div>
 
             {/* Filter Status Bar */}
@@ -408,8 +425,12 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
             {/* Bulk Actions */}
             <BulkActions
               selectedCount={selectedLeadIds.size}
+              totalFilteredCount={leads?.length ?? 0}
               onAction={handleBulkAction}
+              onSelectAll={handleToggleSelectAll}
+              onDeselectAll={() => setSelectedLeadIds(new Set())}
               disabled={bulkMutation.isPending}
+              lastResult={lastBulkResult}
             />
 
             {/* Table */}

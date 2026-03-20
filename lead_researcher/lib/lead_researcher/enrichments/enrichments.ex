@@ -82,7 +82,9 @@ defmodule LeadResearcher.Enrichments do
       case lead
            |> LeadResearcher.Leads.Lead.changeset(%{enrichment_status: enrichment_status})
            |> Repo.update() do
-        {:ok, _} -> enrichment
+        {:ok, updated_lead} ->
+          LeadResearcher.Quality.Priority.recompute_for_lead(updated_lead)
+          enrichment
         {:error, changeset} -> Repo.rollback({:lead_status_failed, changeset})
       end
     end)

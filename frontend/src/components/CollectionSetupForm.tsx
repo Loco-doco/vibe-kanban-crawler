@@ -50,6 +50,11 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [newKeyword, setNewKeyword] = useState('')
   const [extraConditions, setExtraConditions] = useState<string | null>(null)
 
+  // Search Intent Parser Recovery fields
+  const [rawPrompt, setRawPrompt] = useState('')
+  const [platformHints, setPlatformHints] = useState<Record<string, boolean>>({})
+  const [semanticExpansions, setSemanticExpansions] = useState<Record<string, boolean>>({})
+
   // Settings
   const [targetCount, setTargetCount] = useState('30')
   const [searchEffort, setSearchEffort] = useState(2)
@@ -72,6 +77,16 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMin(result.subscriber_min ? String(result.subscriber_min) : '')
       setSubscriberMax(result.subscriber_max ? String(result.subscriber_max) : '')
       setExtraConditions(result.extra_conditions || null)
+      // Search Intent Parser Recovery fields
+      setRawPrompt(result.raw_prompt || '')
+      // Platform hints: default ON
+      const hints: Record<string, boolean> = {}
+      for (const h of result.platform_hints || []) hints[h] = true
+      setPlatformHints(hints)
+      // Semantic expansions: default OFF
+      const exps: Record<string, boolean> = {}
+      for (const e of result.semantic_expansions || []) exps[e] = false
+      setSemanticExpansions(exps)
       setParseError('')
       setStep('confirm')
     },
@@ -93,6 +108,9 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setSubscriberMax('')
       setNewKeyword('')
       setExtraConditions(null)
+      setRawPrompt('')
+      setPlatformHints({})
+      setSemanticExpansions({})
       setTargetCount('30')
       setSearchEffort(2)
       setLabel('')
@@ -114,13 +132,25 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const handleStartCrawl = () => {
     if (keywords.length === 0) return
 
+    // Merge toggled-on semantic expansions into keywords
+    const activeExpansions = Object.entries(semanticExpansions)
+      .filter(([, on]) => on)
+      .map(([kw]) => kw)
+    const mergedKeywords = [...keywords, ...activeExpansions.filter(e => !keywords.includes(e))]
+
+    // Determine platform from active platform hints (first active, or default 'youtube')
+    const activePlatforms = Object.entries(platformHints)
+      .filter(([, on]) => on)
+      .map(([p]) => p)
+    const platform = activePlatforms.length > 0 ? activePlatforms[0] : 'youtube'
+
     createMutation.mutate({
       job: {
         label: label || undefined,
         mode: 'discovery',
         targets: ['discovery'],
-        keywords,
-        platform: 'youtube',
+        keywords: mergedKeywords,
+        platform,
         category_tags: categoryTags.length > 0 ? categoryTags : undefined,
         target_count: targetCount ? Number(targetCount) : 30,
         subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
@@ -164,6 +194,26 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         ? categoryTags.filter((c) => c !== cat)
         : [...categoryTags, cat]
     )
+  }
+
+  // Platform hint toggle
+  const togglePlatformHint = (platform: string) => {
+    setPlatformHints(prev => ({ ...prev, [platform]: !prev[platform] }))
+  }
+
+  // Semantic expansion toggle
+  const toggleExpansion = (expansion: string) => {
+    setSemanticExpansions(prev => ({ ...prev, [expansion]: !prev[expansion] }))
+  }
+
+  const PLATFORM_DISPLAY: Record<string, string> = {
+    youtube: '유튜브',
+    instagram: '인스타그램',
+    liveklass: '라이브클래스',
+    classu: '클래수',
+    class101: 'Class101',
+    taling: '탈잉',
+    classting: '클래스팅',
   }
 
   const formatSubscribers = (val: string) => {
@@ -241,6 +291,34 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             </button>
           </div>
 
+          {/* 원문 프롬프트 */}
+          {rawPrompt && (
+            <div className="setup-section">
+              <span className="setup-label-inline">원문</span>
+              <div className="raw-prompt-box">{rawPrompt}</div>
+            </div>
+          )}
+
+          {/* 감지된 플랫폼 힌트 (toggleable, default ON) */}
+          {Object.keys(platformHints).length > 0 && (
+            <div className="setup-section">
+              <span className="setup-label-inline">감지된 플랫폼 <span className="setup-hint">(클릭하여 ON/OFF)</span></span>
+              <div className="editable-chips">
+                {Object.entries(platformHints).map(([platform, active]) => (
+                  <button
+                    key={platform}
+                    type="button"
+                    className={`category-chip toggle-chip${active ? ' active' : ''}`}
+                    onClick={() => togglePlatformHint(platform)}
+                  >
+                    {PLATFORM_DISPLAY[platform] || platform}
+                    <span className="chip-toggle-indicator">{active ? 'ON' : 'OFF'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 편집 가능: 검색 키워드 */}
           <div className="setup-section">
             <span className="setup-label-inline">검색 키워드</span>
@@ -291,6 +369,26 @@ export default function CollectionSetupForm({ onCreated }: Props) {
               ))}
             </div>
           </div>
+
+          {/* 연관 키워드 제안 (toggleable, default OFF) */}
+          {Object.keys(semanticExpansions).length > 0 && (
+            <div className="setup-section">
+              <span className="setup-label-inline">연관 키워드 제안 <span className="setup-hint">(OFF 기본, 클릭하여 추가)</span></span>
+              <div className="editable-chips">
+                {Object.entries(semanticExpansions).map(([expansion, active]) => (
+                  <button
+                    key={expansion}
+                    type="button"
+                    className={`category-chip toggle-chip${active ? ' active' : ''}`}
+                    onClick={() => toggleExpansion(expansion)}
+                  >
+                    {expansion}
+                    <span className="chip-toggle-indicator">{active ? 'ON' : 'OFF'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* AI가 추출한 비즈니스 조건 (검색 키워드에 반영 불가능한 조건) */}
           {extraConditions && (
@@ -425,8 +523,27 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             <div className="crawl-preview-body">
               <div className="crawl-preview-row">
                 <span className="crawl-preview-label">검색 키워드</span>
-                <span className="crawl-preview-value">{keywords.join(', ') || '-'}</span>
+                <span className="crawl-preview-value">
+                  {keywords.join(', ') || '-'}
+                  {Object.entries(semanticExpansions).some(([, on]) => on) && (
+                    <span className="crawl-preview-extra">
+                      {' + '}
+                      {Object.entries(semanticExpansions).filter(([, on]) => on).map(([kw]) => kw).join(', ')}
+                    </span>
+                  )}
+                </span>
               </div>
+              {Object.keys(platformHints).length > 0 && (
+                <div className="crawl-preview-row">
+                  <span className="crawl-preview-label">플랫폼</span>
+                  <span className="crawl-preview-value">
+                    {Object.entries(platformHints)
+                      .filter(([, on]) => on)
+                      .map(([p]) => PLATFORM_DISPLAY[p] || p)
+                      .join(', ') || 'youtube'}
+                  </span>
+                </div>
+              )}
               {categoryTags.length > 0 && (
                 <div className="crawl-preview-row">
                   <span className="crawl-preview-label">카테고리</span>

@@ -116,6 +116,7 @@ export interface Lead {
   contact_readiness: ContactReadiness
   suspect_reason: string | null
   audience_failure_reason: AudienceFailureReason | null
+  priority_score: number
   // Computed effective values
   effective_name: string | null
   effective_email: string | null

@@ -18,10 +18,39 @@ def log(message):
     print(f"[prompt_parser] {message}", file=sys.stderr, flush=True)
 
 
+PLATFORM_NAMES = {
+    "유튜브": "youtube", "youtube": "youtube",
+    "인스타": "instagram", "인스타그램": "instagram", "instagram": "instagram",
+    "liveklass": "liveklass", "라이브클라스": "liveklass",
+    "classu": "classu", "클래수": "classu",
+    "class101": "class101", "클래스101": "class101",
+    "탈잉": "taling", "클래스팅": "classting",
+}
+
+SEMANTIC_EXPANSIONS = {
+    "교육": ["온라인 클래스", "강의", "교육 콘텐츠", "학습", "교육 유튜버"],
+    "뷰티": ["화장품 리뷰", "메이크업 튜토리얼", "스킨케어"],
+    "요리": ["레시피", "쿠킹 클래스", "요리 유튜버"],
+    "건강": ["헬스", "운동", "다이어트", "건강 유튜버"],
+    "재테크": ["주식", "부동산", "투자", "재테크 유튜버"],
+    "자기계발": ["동기부여", "습관", "생산성", "자기계발 유튜버"],
+}
+
+
 def parse_prompt(prompt):
     """Parse prompt using rule-based extraction — keywords, subscriber range, categories."""
     log(f"parse_prompt: starting (prompt length={len(prompt)})")
     text = prompt.strip()
+    raw_prompt = text
+
+    # --- Extract platform hints ---
+    platform_hints = []
+    text_lower_for_platform = text.lower()
+    seen_platforms = set()
+    for alias, canonical in PLATFORM_NAMES.items():
+        if alias.lower() in text_lower_for_platform and canonical not in seen_platforms:
+            platform_hints.append(canonical)
+            seen_platforms.add(canonical)
 
     # --- Extract subscriber range ---
     subscriber_min = None
@@ -95,6 +124,9 @@ def parse_prompt(prompt):
         "좀", "한번", "정도", "쯤", "약", "대략",
         "키워드",
     ]
+    # Also strip platform name aliases from keywords (they are captured as platform_hints)
+    for alias in PLATFORM_NAMES:
+        filler.append(alias)
     for word in filler:
         cleaned = cleaned.replace(word, " ")
 
@@ -159,6 +191,14 @@ def parse_prompt(prompt):
                 category_tags.append(cat)
                 break
 
+    # --- Collect semantic expansion suggestions (default OFF, user toggles) ---
+    semantic_expansions = []
+    for trigger, expansions in SEMANTIC_EXPANSIONS.items():
+        if trigger in text:
+            for exp in expansions:
+                if exp not in semantic_expansions:
+                    semantic_expansions.append(exp)
+
     result = {
         "keywords": unique_keywords[:5],
         "category_tags": category_tags,
@@ -166,8 +206,11 @@ def parse_prompt(prompt):
         "subscriber_max": subscriber_max,
         "extra_conditions": None,
         "parse_mode": "rule_based",
+        "raw_prompt": raw_prompt,
+        "platform_hints": platform_hints,
+        "semantic_expansions": semantic_expansions,
     }
-    log(f"parse_prompt: OK — keywords={result['keywords']}")
+    log(f"parse_prompt: OK — keywords={result['keywords']}, platform_hints={platform_hints}, expansions={len(semantic_expansions)}")
     return result
 
 

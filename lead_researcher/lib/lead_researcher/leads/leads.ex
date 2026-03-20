@@ -101,6 +101,15 @@ defmodule LeadResearcher.Leads do
           # Log both user changes and auto-computed changes
           all_changes = changes ++ auto_changes
           EditHistories.log_changes(lead.id, all_changes, edited_by)
+
+          # Recompute priority score if relevant fields changed
+          priority_fields = [:contact_readiness, :audience_size_override, :audience_tier_override,
+                             :enrichment_status, :subscriber_count, :audience_tier, :confidence_score]
+          all_change_fields = Enum.map(all_changes, fn {f, _} -> f end)
+          if Enum.any?(priority_fields, &(&1 in all_change_fields)) do
+            LeadResearcher.Quality.Priority.recompute_for_lead(updated)
+          end
+
           {:ok, Repo.preload(updated, :enrichment)}
 
         error ->
@@ -137,12 +146,19 @@ defmodule LeadResearcher.Leads do
     lead = Repo.get!(Lead, lead_id)
     tier = Lead.compute_audience_tier(subscriber_count)
 
-    lead
-    |> Lead.changeset(%{
-      subscriber_count: subscriber_count,
-      audience_tier: tier
-    })
-    |> Repo.update()
+    case lead
+         |> Lead.changeset(%{
+           subscriber_count: subscriber_count,
+           audience_tier: tier
+         })
+         |> Repo.update() do
+      {:ok, updated} ->
+        LeadResearcher.Quality.Priority.recompute_for_lead(updated)
+        {:ok, updated}
+
+      error ->
+        error
+    end
   end
 
   def set_audience_failure_reason(lead_id, reason) do
@@ -347,17 +363,19 @@ defmodule LeadResearcher.Leads do
     order_by(query, [l], desc: ^safe_sort_field(field))
   end
 
-  defp apply_sort(query, _), do: order_by(query, [l], desc: :inserted_at)
+  defp apply_sort(query, _), do: order_by(query, [l], [desc: :priority_score, desc: :inserted_at])
 
+  defp safe_sort_field("priority_score"), do: :priority_score
   defp safe_sort_field("confidence_score"), do: :confidence_score
   defp safe_sort_field("subscriber_count"), do: :subscriber_count
   defp safe_sort_field("email"), do: :email
   defp safe_sort_field("platform"), do: :platform
   defp safe_sort_field("updated_at"), do: :updated_at
+  defp safe_sort_field("inserted_at"), do: :inserted_at
   defp safe_sort_field("email_status"), do: :email_status
   defp safe_sort_field("audience_tier"), do: :audience_tier
   defp safe_sort_field("review_status"), do: :review_status
-  defp safe_sort_field(_), do: :inserted_at
+  defp safe_sort_field(_), do: :priority_score
 
   defp parse_int(params, key, default) do
     case Map.get(params, key) do

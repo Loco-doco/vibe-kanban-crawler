@@ -47,6 +47,9 @@ defmodule LeadResearcher.Leads.Lead do
     # Enrichment tracking
     field :enrichment_status, :string, default: "not_started"
 
+    # Priority ranking (Phase 6)
+    field :priority_score, :integer, default: 0
+
     belongs_to :job, LeadResearcher.Jobs.Job
     has_one :enrichment, LeadResearcher.Enrichments.LeadEnrichment
 
@@ -62,7 +65,8 @@ defmodule LeadResearcher.Leads.Lead do
     :email_status, :audience_metric_type, :audience_tier, :audience_source, :audience_failure_reason,
     :display_name, :contact_email, :audience_size_override, :audience_tier_override,
     :contact_readiness, :suspect_reason,
-    :enrichment_status
+    :enrichment_status,
+    :priority_score
   ]
 
   def changeset(lead, attrs) do

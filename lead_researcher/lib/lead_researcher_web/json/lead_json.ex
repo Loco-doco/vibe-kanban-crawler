@@ -47,6 +47,7 @@ defmodule LeadResearcherWeb.LeadJSON do
       contact_readiness: lead.contact_readiness || "needs_verification",
       suspect_reason: lead.suspect_reason,
       audience_failure_reason: lead.audience_failure_reason,
+      priority_score: lead.priority_score || 0,
       # Computed effective values (user override > raw)
       effective_name: lead.display_name || lead.channel_name,
       effective_email: lead.contact_email || lead.email,

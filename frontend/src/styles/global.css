@@ -2319,6 +2319,82 @@ body {
 .bulk-reject { background: var(--danger-light); color: var(--danger); border-color: #fca5a5; }
 .bulk-hold { background: var(--gray-100); color: var(--gray-600); border-color: var(--gray-200); }
 
+.bulk-actions-left { display: flex; align-items: center; gap: 8px; flex: 1; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--gray-500);
+  border-color: transparent;
+}
+.btn-ghost:hover { background: var(--gray-100); color: var(--gray-700); }
+
+/* Bulk Confirm Modal */
+.bulk-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+.bulk-confirm-modal {
+  background: white;
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+.bulk-confirm-modal h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--gray-900);
+}
+.bulk-confirm-modal p {
+  font-size: 0.88rem;
+  color: var(--gray-600);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.bulk-confirm-description {
+  font-size: 0.8rem !important;
+  color: var(--gray-400) !important;
+}
+.bulk-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Bulk Result Toast */
+.bulk-result-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gray-900);
+  color: white;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1200;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  animation: toast-in 0.3s ease;
+}
+.bulk-result-icon { font-size: 1.1rem; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Review Table */
 .review-table { font-size: 0.78rem; }
 .review-table th { white-space: nowrap; font-size: 0.72rem; }
@@ -3482,4 +3558,56 @@ body {
 }
 .empty-state-action-btn:hover {
   background: #2563eb;
+}
+
+/* ========== Search Intent Parser Recovery (Issue 6-7) ========== */
+
+.raw-prompt-box {
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  color: var(--gray-600, #4b5563);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toggle-chip {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+  gap: 6px;
+}
+
+.toggle-chip:not(.active) {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.chip-toggle-indicator {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.toggle-chip.active .chip-toggle-indicator {
+  background: var(--primary-100, #dbeafe);
+  color: var(--primary-700, #1d4ed8);
+}
+
+.toggle-chip:not(.active) .chip-toggle-indicator {
+  background: var(--gray-100, #f3f4f6);
+  color: var(--gray-400, #9ca3af);
+}
+
+.crawl-preview-extra {
+  color: var(--primary-500, #3b82f6);
+  font-style: italic;
 }
