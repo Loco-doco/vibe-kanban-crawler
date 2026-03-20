@@ -70,19 +70,22 @@ defmodule LeadResearcher.Enrichments do
       coverage_score: evidence["coverage_score"]
     }
 
-    case upsert_enrichment(attrs) do
-      {:ok, enrichment} ->
-        # Update lead's enrichment_status
-        lead = Repo.get!(LeadResearcher.Leads.Lead, lead_id)
-        lead
-        |> LeadResearcher.Leads.Lead.changeset(%{enrichment_status: enrichment_status})
-        |> Repo.update()
+    Repo.transaction(fn ->
+      enrichment =
+        case upsert_enrichment(attrs) do
+          {:ok, e} -> e
+          {:error, changeset} -> Repo.rollback({:enrichment_failed, changeset})
+        end
 
-        {:ok, enrichment}
+      lead = Repo.get!(LeadResearcher.Leads.Lead, lead_id)
 
-      error ->
-        error
-    end
+      case lead
+           |> LeadResearcher.Leads.Lead.changeset(%{enrichment_status: enrichment_status})
+           |> Repo.update() do
+        {:ok, _} -> enrichment
+        {:error, changeset} -> Repo.rollback({:lead_status_failed, changeset})
+      end
+    end)
   end
 
   defp encode_if_list(val) when is_list(val), do: Jason.encode!(val)

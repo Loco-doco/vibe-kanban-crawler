@@ -2,47 +2,34 @@ import type { QualityMetrics } from '../types'
 
 interface Props {
   quality: QualityMetrics
+  activeFilter?: string
   onFilterClick?: (filter: string) => void
 }
 
-export default function ReviewKPICards({ quality, onFilterClick }: Props) {
+export default function ReviewKPICards({ quality, activeFilter, onFilterClick }: Props) {
   const pct = (val: number) => `${Math.round(val * 100)}%`
+
+  const cards = [
+    { key: '', label: '전체', value: quality.total_leads, variant: '' },
+    { key: 'contactable', label: '직접 연락 가능', value: quality.contactable_leads, variant: 'positive' },
+    { key: 'needs_review', label: '검토 대상', value: quality.needs_review_leads, variant: 'warning' },
+    { key: 'needs_correction', label: '보정 대상', value: quality.needs_correction_leads, variant: 'info' },
+    { key: 'excluded', label: '제외 후보', value: quality.excluded_leads, variant: 'muted' },
+  ]
 
   return (
     <div className="review-kpi-section">
       <div className="review-kpi-grid">
-        <div className="review-kpi-card">
-          <span className="review-kpi-value">{quality.total_leads}</span>
-          <span className="review-kpi-label">전체 리드</span>
-        </div>
-        <div
-          className="review-kpi-card action-card positive"
-          onClick={() => onFilterClick?.('contactable')}
-        >
-          <span className="review-kpi-value">{quality.contactable_leads}</span>
-          <span className="review-kpi-label">직접 연락 가능</span>
-        </div>
-        <div
-          className="review-kpi-card action-card warning"
-          onClick={() => onFilterClick?.('needs_review')}
-        >
-          <span className="review-kpi-value">{quality.needs_review_leads}</span>
-          <span className="review-kpi-label">검토 필요</span>
-        </div>
-        <div
-          className="review-kpi-card action-card info"
-          onClick={() => onFilterClick?.('needs_correction')}
-        >
-          <span className="review-kpi-value">{quality.needs_correction_leads}</span>
-          <span className="review-kpi-label">보정 필요</span>
-        </div>
-        <div
-          className="review-kpi-card action-card muted"
-          onClick={() => onFilterClick?.('excluded')}
-        >
-          <span className="review-kpi-value">{quality.excluded_leads}</span>
-          <span className="review-kpi-label">제외 후보</span>
-        </div>
+        {cards.map(card => (
+          <button
+            key={card.key}
+            className={`review-kpi-card${card.variant ? ` action-card ${card.variant}` : ''}${activeFilter === card.key ? ' active' : ''}`}
+            onClick={() => onFilterClick?.(card.key)}
+          >
+            <span className="review-kpi-value">{card.value}</span>
+            <span className="review-kpi-label">{card.label}</span>
+          </button>
+        ))}
       </div>
       <div className="review-kpi-sub">
         영향력 확인됨 {pct(quality.audience_coverage_rate)} · 프로필 보강 완료 {pct(quality.enrichment_coverage_rate)}

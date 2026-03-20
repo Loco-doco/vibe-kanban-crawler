@@ -2137,6 +2137,31 @@ body {
   font-size: 0.82rem;
 }
 
+/* Sidebar Activity Log (enrichment history — P1) */
+.review-sidebar-activity {
+  border-top: 1px solid var(--gray-200);
+  padding: 10px 16px;
+}
+
+.review-sidebar-activity-header {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sidebar-activity-item {
+  font-size: 0.78rem;
+  padding: 3px 0;
+  color: var(--gray-600);
+}
+
+.sidebar-activity-item.running { color: var(--info); }
+.sidebar-activity-item.done { color: var(--success-dark); }
+.sidebar-activity-item.error { color: var(--danger); }
+
 /* Main area */
 .review-main {
   flex: 1;
@@ -2160,7 +2185,26 @@ body {
   border-radius: var(--radius-sm);
   padding: 12px;
   text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+
+.review-kpi-card:hover {
+  border-color: var(--primary-500);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.12);
+}
+
+.review-kpi-card.active {
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  background: #f5f3ff;
+}
+
+.review-kpi-card.action-card.positive .review-kpi-value { color: var(--success-dark); }
+.review-kpi-card.action-card.warning .review-kpi-value { color: var(--warning); }
+.review-kpi-card.action-card.info .review-kpi-value { color: var(--info); }
+.review-kpi-card.action-card.muted .review-kpi-value { color: var(--gray-400); }
 
 .review-kpi-card.warning { border-color: var(--warning); }
 
@@ -2183,6 +2227,12 @@ body {
   font-size: 0.68rem;
   color: var(--gray-400);
   margin-top: 2px;
+}
+
+.review-kpi-sub {
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  padding: 4px 0 0;
 }
 
 /* Quality Banner */
@@ -2214,7 +2264,14 @@ body {
   font-weight: 600;
 }
 
-.quality-banner-cta:hover { opacity: 0.8; }
+.quality-banner-cta:hover:not(:disabled) { opacity: 0.8; }
+.quality-banner-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.quality-banner-cta.running { opacity: 0.7; cursor: wait; }
+.quality-banner-cta.done { border: none; font-weight: 500; cursor: default; opacity: 0.8; }
+.quality-banner-cta.error { border-color: var(--danger); color: var(--danger); }
+.quality-banner-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.quality-banner-cta-wrap { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.cta-disabled-reason { font-size: 0.7rem; color: var(--gray-400); font-style: italic; }
 
 /* Filter Bar */
 .review-filter-bar {
@@ -2997,29 +3054,46 @@ body {
   background: var(--danger-light);
 }
 
-/* ===== Action Badges (UX-3 Table) ===== */
-.action-badge {
+/* ===== Action Labels (UX-3 Table — informational, not clickable) ===== */
+.action-label {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 500;
   white-space: nowrap;
 }
 
-.action-badge.high {
-  background: var(--danger-light);
+.action-label.high {
   color: var(--danger);
 }
 
-.action-badge.medium {
-  background: var(--warning-light);
+.action-label.medium {
   color: #92400e;
 }
 
-.action-badge.low {
-  background: var(--success-light);
+.action-label.low {
   color: var(--success-dark);
+}
+
+/* ===== Contact Mini Badge (inline in email column) ===== */
+.contact-mini-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.contact-mini-badge.contactable { background: var(--success-light); color: var(--success-dark); }
+.contact-mini-badge.no_email { background: var(--gray-100); color: var(--gray-400); }
+.contact-mini-badge.platform_suspect { background: #fef3c7; color: #92400e; }
+.contact-mini-badge.needs_verification { background: #dbeafe; color: #1d4ed8; }
+.contact-mini-badge.user_confirmed { background: var(--info); color: white; }
+
+.email-text {
+  font-size: 0.78rem;
+  color: var(--gray-700);
 }
 
 /* ===== Table: Platform/Audience merged column (UX-3) ===== */

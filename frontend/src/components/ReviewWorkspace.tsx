@@ -17,16 +17,24 @@ interface Props {
 
 const FINISHED_STATUSES = ['completed', 'completed_low_yield', 'failed', 'cancelled']
 
+type EnrichState = 'idle' | 'running' | 'done' | 'error'
+
 export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId ?? null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
   const [searchText, setSearchText] = useState('')
   const [contactReadinessFilter, setContactReadinessFilter] = useState('')
-  const [reviewStatusFilter, setReviewStatusFilter] = useState('')
+  const [reviewStatusFilter, setReviewStatusFilter] = useState('needs_review')
   const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('')
   const [audienceTierFilter, setAudienceTierFilter] = useState('')
   const [supplementModalType, setSupplementModalType] = useState<SupplementaryType | null>(null)
+  const [activeKPIFilter, setActiveKPIFilter] = useState<string>('needs_review')
+
+  // CTA states
+  const [subscriberEnrichState, setSubscriberEnrichState] = useState<EnrichState>('idle')
+  const [channelEnrichState, setChannelEnrichState] = useState<EnrichState>('idle')
+
   const queryClient = useQueryClient()
 
   // Jobs
@@ -77,9 +85,12 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     setDrawerLeadId(null)
     setSearchText('')
     setContactReadinessFilter('')
-    setReviewStatusFilter('')
+    setReviewStatusFilter('needs_review')
     setEnrichmentStatusFilter('')
     setAudienceTierFilter('')
+    setActiveKPIFilter('needs_review')
+    setSubscriberEnrichState('idle')
+    setChannelEnrichState('idle')
   }, [])
 
   const handleToggleSelect = useCallback((id: number) => {
@@ -123,28 +134,70 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   }, [])
 
   const handleEnrichSubscribers = useCallback(async () => {
-    if (!activeJobId) return
-    await enrichSubscribers(activeJobId)
-  }, [activeJobId])
+    if (!activeJobId || subscriberEnrichState === 'running') return
+    setSubscriberEnrichState('running')
+    try {
+      await enrichSubscribers(activeJobId)
+      setSubscriberEnrichState('done')
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+    } catch {
+      setSubscriberEnrichState('error')
+    }
+  }, [activeJobId, subscriberEnrichState, queryClient])
 
   const handleEnrichChannels = useCallback(async () => {
-    if (!activeJobId) return
-    await enrichChannels(activeJobId)
-  }, [activeJobId])
+    if (!activeJobId || channelEnrichState === 'running') return
+    setChannelEnrichState('running')
+    try {
+      await enrichChannels(activeJobId)
+      setChannelEnrichState('done')
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+    } catch {
+      setChannelEnrichState('error')
+    }
+  }, [activeJobId, channelEnrichState, queryClient])
 
   const handleKPIFilterClick = useCallback((filter: string) => {
+    setActiveKPIFilter(filter)
+    // Reset all filters then apply KPI-specific filter
+    setContactReadinessFilter('')
+    setEnrichmentStatusFilter('')
+    setAudienceTierFilter('')
+
     if (filter === 'needs_review') {
       setReviewStatusFilter('needs_review')
     } else if (filter === 'excluded') {
       setReviewStatusFilter('auto_rejected')
     } else if (filter === 'contactable') {
-      setContactReadinessFilter('contactable')
       setReviewStatusFilter('')
+      setContactReadinessFilter('contactable')
     } else if (filter === 'needs_correction') {
       setReviewStatusFilter('')
-      setContactReadinessFilter('')
+      setEnrichmentStatusFilter('not_started')
+    } else {
+      // 전체
+      setReviewStatusFilter('')
     }
   }, [])
+
+  // Derive subscriber/channel enrich disabled reasons
+  const subscriberDisabledReason = (() => {
+    if (subscriberEnrichState === 'running') return '실행 중...'
+    if (subscriberEnrichState === 'done') return '완료됨'
+    if (!quality) return null
+    if (quality.audience_coverage_rate >= 1.0) return '보정 대상 없음'
+    return null
+  })()
+
+  const channelDisabledReason = (() => {
+    if (channelEnrichState === 'running') return '실행 중...'
+    if (channelEnrichState === 'done') return '완료됨'
+    if (!quality) return null
+    if (quality.enrichment_coverage_rate >= 1.0) return '보강 대상 없음'
+    return null
+  })()
 
   return (
     <div className="review-workspace">
@@ -152,6 +205,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
         jobs={finishedJobs}
         selectedJobId={activeJobId}
         onSelect={handleSelectJob}
+        subscriberEnrichState={subscriberEnrichState}
+        channelEnrichState={channelEnrichState}
       />
 
       <div className="review-main">
@@ -164,33 +219,46 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
         ) : (
           <>
             {/* KPI Cards */}
-            {quality && <ReviewKPICards quality={quality} onFilterClick={handleKPIFilterClick} />}
+            {quality && (
+              <ReviewKPICards
+                quality={quality}
+                activeFilter={activeKPIFilter}
+                onFilterClick={handleKPIFilterClick}
+              />
+            )}
 
-            {/* Quality Banner */}
+            {/* Quality Banner with CTA states */}
             {quality && (
               <QualityBanner
                 quality={quality}
                 onSupplementarySearch={handleSupplementarySearch}
                 onEnrichSubscribers={handleEnrichSubscribers}
+                subscriberEnrichState={subscriberEnrichState}
+                subscriberDisabledReason={subscriberDisabledReason}
                 onEnrichChannels={handleEnrichChannels}
+                channelEnrichState={channelEnrichState}
+                channelDisabledReason={channelDisabledReason}
               />
             )}
 
-            {/* Review Queue Tabs */}
+            {/* Queue Tabs — uses different labels from KPI cards */}
             <div className="review-queue-tabs">
               {[
                 { value: '', label: '전체' },
-                { value: 'needs_review', label: '검토 필요' },
+                { value: 'needs_review', label: '검토 큐' },
                 { value: 'auto_approved', label: '자동 승인' },
                 { value: 'auto_rejected', label: '자동 제외' },
-                { value: 'approved', label: '승인' },
-                { value: 'rejected', label: '제외' },
+                { value: 'approved', label: '수동 승인' },
+                { value: 'rejected', label: '수동 제외' },
                 { value: 'held', label: '보류' },
               ].map(tab => (
                 <button
                   key={tab.value}
                   className={`queue-tab${reviewStatusFilter === tab.value ? ' active' : ''}`}
-                  onClick={() => setReviewStatusFilter(tab.value)}
+                  onClick={() => {
+                    setReviewStatusFilter(tab.value)
+                    setActiveKPIFilter('')
+                  }}
                 >
                   {tab.label}
                 </button>

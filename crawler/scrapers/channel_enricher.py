@@ -11,7 +11,6 @@ Evidence spec per field: method, confidence, fragment.
 """
 import re
 import json
-import time
 from datetime import datetime, timezone
 
 from utils.http_client import fetch_with_retry
@@ -56,7 +55,7 @@ class ChannelEnricher:
 
     TARGET_FIELDS = [
         "profile_summary", "business_summary", "business_type",
-        "content_topics", "profile_tags", "recent_videos",
+        "content_topics", "profile_tags", "recent_activity_summary",
         "secondary_platforms",
     ]
 
@@ -89,13 +88,6 @@ class ChannelEnricher:
         )
         description = metadata.get("description", "")
         keywords_str = metadata.get("keywords", "")
-
-        # Extract header for external links
-        header = (
-            yt_data
-            .get("header", {})
-            .get("c4TabbedHeaderRenderer", {})
-        )
 
         # Build enrichment fields with evidence
         fields = {}

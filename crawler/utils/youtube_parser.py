@@ -32,6 +32,14 @@ def parse_subscriber_text(text):
         except ValueError:
             pass
 
+    # Korean format: "구독자 5.2천명", "5.2천"
+    m = re.search(r"([\d.]+)\s*천", text)
+    if m:
+        try:
+            return int(float(m.group(1)) * 1_000)
+        except ValueError:
+            pass
+
     # English/international multiplier suffixes
     multipliers = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
     for suffix, mult in multipliers.items():

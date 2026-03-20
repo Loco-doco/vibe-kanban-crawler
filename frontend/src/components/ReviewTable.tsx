@@ -29,6 +29,11 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
   return { label: '검토 필요', priority: 'medium' }
 }
 
+function truncateEmail(email: string | null, max: number = 28): string {
+  if (!email) return '(없음)'
+  return email.length > max ? email.slice(0, max) + '...' : email
+}
+
 export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onRowClick }: Props) {
   const allSelected = leads.length > 0 && selectedIds.size === leads.length
 
@@ -45,16 +50,17 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
               />
             </th>
             <th>리드명</th>
-            <th>연락 가능성</th>
+            <th>이메일</th>
             <th>플랫폼 / 영향력</th>
             <th>카테고리</th>
             <th>리뷰</th>
-            <th>추천 액션</th>
+            <th>다음 단계</th>
           </tr>
         </thead>
         <tbody>
           {leads.map(lead => {
             const action = getRecommendedAction(lead)
+            const email = lead.contact_email || lead.email
             return (
               <tr
                 key={lead.id}
@@ -71,10 +77,15 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                 <td className="col-name">
                   {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
                 </td>
-                <td>
-                  <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
-                    {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
+                <td className="col-email">
+                  <span className="email-text" title={email || undefined}>
+                    {truncateEmail(email)}
                   </span>
+                  {email && (
+                    <span className={`contact-mini-badge ${lead.contact_readiness}`}>
+                      {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
+                    </span>
+                  )}
                 </td>
                 <td className="col-platform-audience">
                   <span className={`platform-badge ${lead.platform}`}>
@@ -113,7 +124,7 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                   </span>
                 </td>
                 <td>
-                  <span className={`action-badge ${action.priority}`}>
+                  <span className={`action-label ${action.priority}`} title={action.label}>
                     {action.label}
                   </span>
                 </td>

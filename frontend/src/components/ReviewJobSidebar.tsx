@@ -1,13 +1,22 @@
 import type { Job } from '../types'
 import { STATUS_LABELS } from '../types'
 
+type EnrichState = 'idle' | 'running' | 'done' | 'error'
+
 interface Props {
   jobs: Job[]
   selectedJobId: number | null
   onSelect: (jobId: number) => void
+  subscriberEnrichState?: EnrichState
+  channelEnrichState?: EnrichState
 }
 
-export default function ReviewJobSidebar({ jobs, selectedJobId, onSelect }: Props) {
+const ENRICH_LABELS: Record<string, { running: string; done: string; error: string }> = {
+  subscriber: { running: '영향력 보정 실행 중...', done: '영향력 보정 완료', error: '영향력 보정 실패' },
+  channel: { running: '프로필 보강 실행 중...', done: '프로필 보강 완료', error: '프로필 보강 실패' },
+}
+
+export default function ReviewJobSidebar({ jobs, selectedJobId, onSelect, subscriberEnrichState = 'idle', channelEnrichState = 'idle' }: Props) {
   // Group: parent jobs first, then their supplements underneath
   const parentJobs = jobs.filter(j => !j.parent_job_id)
   const parentIds = new Set(parentJobs.map(j => j.id))
@@ -97,6 +106,22 @@ export default function ReviewJobSidebar({ jobs, selectedJobId, onSelect }: Prop
           <div className="review-sidebar-empty">완료된 탐색이 없습니다</div>
         )}
       </div>
+      {/* Activity log for enrichment (not new searches — P1) */}
+      {selectedJobId && (subscriberEnrichState !== 'idle' || channelEnrichState !== 'idle') && (
+        <div className="review-sidebar-activity">
+          <div className="review-sidebar-activity-header">보정 이력</div>
+          {subscriberEnrichState !== 'idle' && (
+            <div className={`sidebar-activity-item ${subscriberEnrichState}`}>
+              {ENRICH_LABELS.subscriber[subscriberEnrichState as 'running' | 'done' | 'error']}
+            </div>
+          )}
+          {channelEnrichState !== 'idle' && (
+            <div className={`sidebar-activity-item ${channelEnrichState}`}>
+              {ENRICH_LABELS.channel[channelEnrichState as 'running' | 'done' | 'error']}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
