@@ -1,5 +1,5 @@
 import api from './client'
-import type { Lead, QualityMetrics, EditHistoryEntry, ReviewStatus } from '../types'
+import type { Lead, QualityMetrics, EditHistoryEntry, ReviewStatus, ApproveAndQueueResult } from '../types'
 
 interface LeadParams {
   job_id?: number
@@ -43,6 +43,13 @@ export async function bulkReview(leadIds: number[], reviewStatus: ReviewStatus):
   const { data } = await api.post<{ updated: number }>('/leads/bulk-review', {
     lead_ids: leadIds,
     review_status: reviewStatus,
+  })
+  return data
+}
+
+export async function approveAndQueue(leadIds: number[]): Promise<ApproveAndQueueResult> {
+  const { data } = await api.post<ApproveAndQueueResult>('/leads/approve-and-queue', {
+    lead_ids: leadIds,
   })
   return data
 }

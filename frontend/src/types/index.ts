@@ -1,7 +1,7 @@
 export type JobStatus = 'draft' | 'queued' | 'running' | 'partial_results' | 'completed' | 'completed_low_yield' | 'failed' | 'cancelled'
 
 export type ReviewStatus = 'pending' | 'auto_approved' | 'auto_rejected' | 'needs_review' | 'approved' | 'rejected' | 'held'
-export type MasterSyncStatus = 'not_synced' | 'ready' | 'conflict' | 'synced'
+export type MasterSyncStatus = 'not_synced' | 'master_review_queue' | 'ready_to_sync' | 'conflict_queue' | 'synced'
 export type EmailStatus = 'missing' | 'unverified' | 'valid_syntax' | 'invalid_syntax' | 'user_corrected'
 export type AudienceMetricType = 'subscriber' | 'follower' | 'member' | 'unknown'
 export type AudienceTier = 'nano' | 'micro' | 'mid' | 'macro' | 'mega'
@@ -117,6 +117,7 @@ export interface Lead {
   suspect_reason: string | null
   audience_failure_reason: AudienceFailureReason | null
   priority_score: number
+  conflict_details: ConflictDetail[] | null
   // Computed effective values
   effective_name: string | null
   effective_email: string | null
@@ -181,6 +182,18 @@ export interface CreateJobPayload {
     delay_ms: number
     max_depth: number
   }
+}
+
+export interface ConflictDetail {
+  rule: 'channel_url' | 'handle' | 'contact_email' | 'platform_name'
+  existing_lead_id: number
+  value: string
+}
+
+export interface ApproveAndQueueResult {
+  ready: number
+  conflicts: number
+  conflict_leads: { lead_id: number; conflicts: ConflictDetail[] }[]
 }
 
 export interface DuplicateGroup {
@@ -260,8 +273,9 @@ export const REVIEW_STATUS_LABELS: Record<string, string> = {
 
 export const MASTER_SYNC_LABELS: Record<string, string> = {
   not_synced: '미반영',
-  ready: '반영 가능',
-  conflict: '충돌',
+  master_review_queue: '대기열',
+  ready_to_sync: '반영 가능',
+  conflict_queue: '충돌 확인',
   synced: '반영 완료',
 }
 

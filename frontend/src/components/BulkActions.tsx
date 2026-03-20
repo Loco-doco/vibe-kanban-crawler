@@ -14,12 +14,14 @@ interface Props {
 export interface BulkResult {
   action: ReviewStatus
   count: number
+  ready?: number
+  conflicts?: number
 }
 
 type ConfirmAction = 'approved' | 'rejected' | 'held'
 
 const ACTION_LABELS: Record<ConfirmAction, { verb: string; description: string }> = {
-  approved: { verb: '승인', description: '마스터 반영 대기열로 보냅니다.' },
+  approved: { verb: '승인', description: '마스터 반영 대기열로 보냅니다. 중복/충돌 검사가 자동 실행됩니다.' },
   rejected: { verb: '제외', description: '제외 큐로 이동합니다. (복구 가능)' },
   held: { verb: '보류', description: '보류 큐에 보관합니다.' },
 }
@@ -83,7 +85,16 @@ export default function BulkActions({
       {lastResult && (
         <div className="bulk-result-toast">
           <span className="bulk-result-icon">{'\u2705'}</span>
-          {lastResult.count}건 {ACTION_LABELS[lastResult.action as ConfirmAction]?.verb || lastResult.action} 완료
+          {lastResult.action === 'approved' ? (
+            <>
+              {lastResult.count}건 승인 → 대기열 이동
+              {lastResult.conflicts != null && lastResult.conflicts > 0 && (
+                <span className="bulk-result-conflict"> (충돌 {lastResult.conflicts}건)</span>
+              )}
+            </>
+          ) : (
+            <>{lastResult.count}건 {ACTION_LABELS[lastResult.action as ConfirmAction]?.verb || lastResult.action} 완료</>
+          )}
         </div>
       )}
 

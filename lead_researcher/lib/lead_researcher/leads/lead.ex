@@ -50,6 +50,9 @@ defmodule LeadResearcher.Leads.Lead do
     # Priority ranking (Phase 6)
     field :priority_score, :integer, default: 0
 
+    # Handoff conflict details (Phase 6 WS4) — JSON string
+    field :conflict_details, :string
+
     belongs_to :job, LeadResearcher.Jobs.Job
     has_one :enrichment, LeadResearcher.Enrichments.LeadEnrichment
 
@@ -66,7 +69,8 @@ defmodule LeadResearcher.Leads.Lead do
     :display_name, :contact_email, :audience_size_override, :audience_tier_override,
     :contact_readiness, :suspect_reason,
     :enrichment_status,
-    :priority_score
+    :priority_score,
+    :conflict_details
   ]
 
   def changeset(lead, attrs) do
@@ -76,7 +80,7 @@ defmodule LeadResearcher.Leads.Lead do
     |> validate_inclusion(:status, ~w(scraped verified contacted replied bounced manual_review))
     |> validate_inclusion(:platform, ~w(youtube instagram class101 liveklass web unknown))
     |> validate_inclusion(:review_status, ~w(pending auto_approved auto_rejected needs_review approved rejected held))
-    |> validate_inclusion(:master_sync_status, ~w(not_synced ready conflict synced))
+    |> validate_inclusion(:master_sync_status, ~w(not_synced master_review_queue ready_to_sync conflict_queue synced))
     |> validate_inclusion(:email_status, ~w(missing unverified valid_syntax invalid_syntax user_corrected))
     |> validate_inclusion(:audience_metric_type, ~w(subscriber follower member unknown))
     |> validate_inclusion(:enrichment_status, ~w(not_started completed low_confidence failed))

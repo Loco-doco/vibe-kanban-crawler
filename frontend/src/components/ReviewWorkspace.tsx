@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
 import type { EnrichmentRun } from '../api/jobs'
-import { getLeads, getQuality, bulkReview } from '../api/leads'
+import { getLeads, getQuality, bulkReview, approveAndQueue } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
 import QualityBanner from './QualityBanner'
@@ -129,7 +129,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     queryClient.invalidateQueries({ queryKey: ['quality'] })
   }
 
-  // Bulk review mutation
+  // Bulk review mutation (held/rejected)
   const bulkMutation = useMutation({
     mutationFn: ({ ids, status }: { ids: number[]; status: ReviewStatus }) => bulkReview(ids, status),
     onSuccess: (_data, variables) => {
@@ -138,6 +138,23 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       setLastBulkResult({ action: variables.status, count: variables.ids.length })
       setSelectedLeadIds(new Set())
       setTimeout(() => setLastBulkResult(null), 4000)
+    },
+  })
+
+  // Approve + queue for master (approval only)
+  const approveMutation = useMutation({
+    mutationFn: (ids: number[]) => approveAndQueue(ids),
+    onSuccess: (result, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      setLastBulkResult({
+        action: 'approved',
+        count: ids.length,
+        ready: result.ready,
+        conflicts: result.conflicts,
+      })
+      setSelectedLeadIds(new Set())
+      setTimeout(() => setLastBulkResult(null), 5000)
     },
   })
 
@@ -228,8 +245,13 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   }, [leads, selectedLeadIds.size])
 
   const handleBulkAction = useCallback((status: ReviewStatus) => {
-    bulkMutation.mutate({ ids: Array.from(selectedLeadIds), status })
-  }, [selectedLeadIds, bulkMutation])
+    const ids = Array.from(selectedLeadIds)
+    if (status === 'approved') {
+      approveMutation.mutate(ids)
+    } else {
+      bulkMutation.mutate({ ids, status })
+    }
+  }, [selectedLeadIds, bulkMutation, approveMutation])
 
   const handleViewDetail = useCallback((lead: Lead) => {
     setDrawerLeadId(lead.id)
@@ -429,7 +451,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               onAction={handleBulkAction}
               onSelectAll={handleToggleSelectAll}
               onDeselectAll={() => setSelectedLeadIds(new Set())}
-              disabled={bulkMutation.isPending}
+              disabled={bulkMutation.isPending || approveMutation.isPending}
               lastResult={lastBulkResult}
             />
 

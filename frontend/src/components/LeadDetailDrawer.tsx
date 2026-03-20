@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateLead } from '../api/leads'
+import { updateLead, approveAndQueue } from '../api/leads'
 import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
@@ -44,8 +44,21 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated, onOpenFullD
     },
   })
 
+  const approveMutation = useMutation({
+    mutationFn: () => approveAndQueue([lead.id]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      onUpdated()
+    },
+  })
+
   const handleReviewAction = (status: string) => {
-    updateMutation.mutate({ review_status: status } as Partial<Lead>)
+    if (status === 'approved') {
+      approveMutation.mutate()
+    } else {
+      updateMutation.mutate({ review_status: status } as Partial<Lead>)
+    }
   }
 
   const action = getRecommendedAction(lead)
@@ -99,7 +112,7 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated, onOpenFullD
           <button className="drawer-close" onClick={onClose}>&times;</button>
         </div>
 
-        {updateMutation.isPending && (
+        {(updateMutation.isPending || approveMutation.isPending) && (
           <div className="drawer-saving">저장 중...</div>
         )}
 
@@ -179,8 +192,8 @@ export default function LeadDetailDrawer({ lead, onClose, onUpdated, onOpenFullD
               <button
                 className="judgment-btn approve"
                 onClick={() => handleReviewAction('approved')}
-                disabled={lead.review_status === 'approved'}
-              >승인</button>
+                disabled={lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'}
+              >승인 + 대기열</button>
               <button
                 className="judgment-btn hold"
                 onClick={() => handleReviewAction('held')}

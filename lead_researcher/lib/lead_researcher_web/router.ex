@@ -21,6 +21,7 @@ defmodule LeadResearcherWeb.Router do
     get "/leads/export/csv", LeadController, :export_csv
     resources "/leads", LeadController, only: [:index, :show, :update, :delete]
     post "/leads/bulk-review", LeadController, :bulk_review
+    post "/leads/approve-and-queue", LeadController, :approve_and_queue
     get "/leads/:id/edit-history", LeadController, :edit_history
 
     # Quality metrics
