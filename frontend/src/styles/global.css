@@ -3668,3 +3668,68 @@ body {
   color: var(--primary-500, #3b82f6);
   font-style: italic;
 }
+
+/* P5-1: Search creation form field groups */
+.search-field-group {
+  margin-bottom: 16px;
+}
+
+.search-clue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-clue-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-clue-item .setup-input {
+  flex: 1;
+}
+
+.category-selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.category-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.category-suggestions .category-chip {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  opacity: 0.7;
+}
+
+.category-suggestions .category-chip:hover {
+  opacity: 1;
+}
+
+.platform-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.search-summary-card {
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+
+.search-step-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
