@@ -17,37 +17,37 @@ const navSections: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: '리서치',
+    label: '탐색',
     items: [
-      { to: '/collection', icon: '\u{1F50D}', label: '리드 파이프라인' },
+      { to: '/search/new', icon: '\u2795', label: '새 탐색' },
+      { to: '/search/active', icon: '\u{1F4E1}', label: '진행 중인 탐색' },
     ],
   },
   {
     label: '리드',
     items: [
-      { to: '/leads', icon: '\u{1F465}', label: '전체 리드' },
-      { to: '/master-list', icon: '\u{1F4CB}', label: '마스터 리스트' },
+      { to: '/review', icon: '\u{1F4CB}', label: '리드 검토' },
     ],
   },
   {
-    label: '아웃리치',
+    label: '연락',
     items: [
-      { to: '/campaigns', icon: '\u2709\uFE0F', label: '캠페인', disabled: true },
+      { to: '/contacts', icon: '\u2709\uFE0F', label: '연락 대상' },
+      { to: '/campaigns', icon: '\u{1F4E8}', label: '캠페인', disabled: true },
       { to: '/templates', icon: '\u{1F4C4}', label: '템플릿', disabled: true },
-      { to: '/sequences', icon: '\u{1F504}', label: '시퀀스', disabled: true },
     ],
   },
   {
-    label: '분석',
+    label: '운영',
     items: [
-      { to: '/reports', icon: '\u{1F4C8}', label: '리포트', disabled: true },
-      { to: '/performance', icon: '\u{1F3AF}', label: '성과 분석', disabled: true },
+      { to: '/admin/leads', icon: '\u{1F465}', label: '전체 리드 DB' },
+      { to: '/admin/import', icon: '\u{1F4C1}', label: '데이터 가져오기' },
+      { to: '/admin/settings', icon: '\u2699\uFE0F', label: '시스템 설정' },
     ],
   },
 ]
 
 const bottomItems = [
-  { to: '/settings', icon: '\u2699\uFE0F', label: '설정' },
   { to: '/help', icon: '\u2753', label: '도움말' },
 ]
 

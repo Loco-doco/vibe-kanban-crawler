@@ -126,7 +126,7 @@ export default function JobMonitor({ onViewResults }: Props) {
       ) : (
         <div className="empty-state">
           <h3>진행 중인 탐색이 없습니다</h3>
-          <p>"새 탐색 만들기" 탭에서 시작하세요</p>
+          <p>새 탐색 페이지에서 시작하세요</p>
         </div>
       )}
     </div>
