@@ -63,18 +63,23 @@ export async function getEnrichmentRun(runId: number): Promise<EnrichmentRun> {
 }
 
 export interface ParsedPrompt {
-  keywords: string[]
-  category_tags: string[]
+  // V2 fields
+  target_persona: string | null
+  search_clues: string[]
+  categories: string[]
+  active_platforms: string[]
+  exclude_conditions: string | null
+  // Shared fields
   subscriber_min: number | null
   subscriber_max: number | null
-  extra_conditions: string | null
-  parse_mode?: string
   raw_prompt: string
-  platform_hints: string[]
-  semantic_expansions: string[]
-  parse_confidence: number
-  confidence_level: 'high' | 'medium' | 'low'
-  confidence_signals: string[]
+  parse_mode?: string
+  // Backward compat (present in API response, not used by new form)
+  keywords?: string[]
+  category_tags?: string[]
+  platform_hints?: string[]
+  semantic_expansions?: string[]
+  extra_conditions?: string | null
 }
 
 export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {
