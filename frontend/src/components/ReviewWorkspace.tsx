@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
-import type { EnrichmentRun } from '../api/jobs'
 import { getLeads, getQuality, bulkReview, approveAndQueue, bulkResolveConflicts, syncToMaster } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
