@@ -3,17 +3,18 @@ import { useQuery } from '@tanstack/react-query'
 import { getJobs } from '../api/jobs'
 import CollectionSetupForm from '../components/CollectionSetupForm'
 import JobMonitor from '../components/JobMonitor'
-import CollectionResults from '../components/CollectionResults'
+import ReviewWorkspace from '../components/ReviewWorkspace'
+import EnrichmentImport from '../components/EnrichmentImport'
 import type { Job } from '../types'
 
-type TabKey = 'setup' | 'monitor' | 'results'
+type TabKey = 'setup' | 'monitor' | 'results' | 'operator'
 
 export default function Collection() {
-  const [activeTab, setActiveTab] = useState<TabKey>('setup')
+  const [activeTab, setActiveTab] = useState<TabKey>('results')
   const [resultJobId, setResultJobId] = useState<number | null>(null)
 
   const { data: jobs } = useQuery({ queryKey: ['jobs'], queryFn: getJobs, refetchInterval: 5000 })
-  const activeCount = jobs?.filter((j: Job) => j.status === 'running' || j.status === 'pending').length || 0
+  const activeCount = jobs?.filter((j: Job) => ['draft', 'queued', 'running', 'partial_results'].includes(j.status)).length || 0
 
   const handleViewResults = (jobId: number) => {
     setResultJobId(jobId)
@@ -24,8 +25,8 @@ export default function Collection() {
     <>
       <div className="page-header">
         <div>
-          <h2>리드 수집</h2>
-          <p className="page-header-sub">크롤러를 이용해 크리에이터의 연락처를 탐색하고 수집하세요</p>
+          <h2>리드 파이프라인</h2>
+          <p className="page-header-sub">크리에이터 리드를 수집하고, 검증하고, 연락 대상을 선별하세요</p>
         </div>
       </div>
 
@@ -50,7 +51,14 @@ export default function Collection() {
           onClick={() => setActiveTab('results')}
         >
           <span className="collection-tab-icon">{'\u{1F4CA}'}</span>
-          탐색 결과
+          리드 검토
+        </button>
+        <button
+          className={`collection-tab${activeTab === 'operator' ? ' active' : ''}`}
+          onClick={() => setActiveTab('operator')}
+        >
+          <span className="collection-tab-icon">{'\u{1F6E0}\uFE0F'}</span>
+          운영자 도구
         </button>
       </div>
 
@@ -62,7 +70,10 @@ export default function Collection() {
           <JobMonitor onViewResults={handleViewResults} />
         )}
         {activeTab === 'results' && (
-          <CollectionResults initialJobId={resultJobId} />
+          <ReviewWorkspace initialJobId={resultJobId} />
+        )}
+        {activeTab === 'operator' && (
+          <EnrichmentImport />
         )}
       </div>
     </>

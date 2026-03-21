@@ -12,9 +12,29 @@ defmodule LeadResearcherWeb.Router do
 
     resources "/jobs", JobController, only: [:index, :create, :show]
     post "/jobs/:id/cancel", JobController, :cancel
+    post "/jobs/:id/supplement", JobController, :supplement
+    post "/jobs/:id/enrich-subscribers", JobController, :enrich_subscribers
+    post "/jobs/:id/enrich-channels", JobController, :enrich_channels
+    get "/enrichment-runs/:id", JobController, :enrichment_run_status
+    post "/parse-prompt", JobController, :parse_prompt
 
     get "/leads/export/csv", LeadController, :export_csv
     resources "/leads", LeadController, only: [:index, :show, :update, :delete]
+    post "/leads/bulk-review", LeadController, :bulk_review
+    post "/leads/approve-and-queue", LeadController, :approve_and_queue
+    post "/leads/resolve-conflict", LeadController, :resolve_conflict
+    post "/leads/bulk-resolve-conflicts", LeadController, :bulk_resolve_conflicts
+    post "/leads/sync-to-master", LeadController, :sync_to_master
+    get "/leads/:id/edit-history", LeadController, :edit_history
+
+    # Quality metrics
+    get "/quality/jobs/:id", QualityController, :show
+
+    # Export / Import for operator assist
+    get "/export/jobs/:id", ExportController, :export_job
+    get "/export/leads", ExportController, :export_leads
+    post "/import/enrichments", ImportController, :import_enrichments
+    post "/import/keywords", ImportController, :import_keywords
 
     get "/master-list", MasterListController, :index
     post "/master-list/add", MasterListController, :add

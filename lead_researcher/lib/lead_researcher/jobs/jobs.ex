@@ -60,15 +60,79 @@ defmodule LeadResearcher.Jobs do
   end
 
   def cancel_job(job_id) do
-    update_job_status(job_id, "cancelled")
+    update_job_status(job_id, "cancelled", %{
+      termination_reason: "user_cancelled",
+      completed_at: DateTime.utc_now()
+    })
   end
 
   def list_pending_job_ids do
     Job
-    |> where([j], j.status == "pending")
+    |> where([j], j.status == "queued")
     |> order_by(asc: :inserted_at)
     |> select([j], j.id)
     |> Repo.all()
+  end
+
+  @doc """
+  Determines the final completion status based on termination_reason.
+
+  - target_reached → completed
+  - sources_exhausted / duplicate_heavy / insufficient_contact_coverage → completed_low_yield
+  - timeout / system_error → failed
+  - user_cancelled → cancelled
+  """
+  def determine_completion_status(job_id) do
+    job = get_job!(job_id)
+
+    case job.termination_reason do
+      "target_reached" -> "completed"
+      reason when reason in ~w(sources_exhausted duplicate_heavy insufficient_contact_coverage) -> "completed_low_yield"
+      "timeout" -> "failed"
+      "system_error" -> "failed"
+      "user_cancelled" -> "cancelled"
+      _ -> "completed"
+    end
+  end
+
+  @doc """
+  Create a supplementary job linked to a parent job.
+  Copies platform, targets, keywords, category_tags, and crawler settings from the parent.
+  """
+  def create_supplementary_job(parent_job_id, supplementary_type) do
+    parent = get_job!(parent_job_id)
+
+    label_suffix =
+      case supplementary_type do
+        "email_supplement" -> "이메일 보완"
+        "audience_supplement" -> "영향력 보완"
+        "meta_supplement" -> "보강 보완"
+        _ -> "보완"
+      end
+
+    parent_label = parent.label || "Job ##{parent.id}"
+
+    attrs = %{
+      "targets" => parent.targets,
+      "platform" => parent.platform,
+      "keywords" => parent.keywords,
+      "category_tags" => parent.category_tags,
+      "mode" => parent.mode || "url",
+      "target_count" => parent.target_count,
+      "subscriber_min" => parent.subscriber_min,
+      "subscriber_max" => parent.subscriber_max,
+      "max_retries" => parent.max_retries,
+      "delay_ms" => parent.delay_ms,
+      "max_depth" => parent.max_depth,
+      "label" => "#{parent_label} - #{label_suffix}",
+      "parent_job_id" => parent.id,
+      "supplementary_type" => supplementary_type,
+      "status" => "queued"
+    }
+
+    %Job{}
+    |> Job.changeset(attrs)
+    |> Repo.insert()
   end
 
   defp maybe_filter_status(query, %{"status" => status}) when is_binary(status) do

@@ -19,7 +19,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
   {
     label: '리서치',
     items: [
-      { to: '/collection', icon: '\u{1F50D}', label: '리드 수집' },
+      { to: '/collection', icon: '\u{1F50D}', label: '리드 파이프라인' },
     ],
   },
   {

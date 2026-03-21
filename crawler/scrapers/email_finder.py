@@ -17,6 +17,7 @@ from urllib.parse import quote_plus, urlparse, unquote
 
 from utils.http_client import fetch_with_retry
 from utils.parser import extract_emails_from_html, extract_links
+from utils.youtube_parser import extract_subscriber_count
 from qa.email_validator import is_valid_email
 
 
@@ -46,14 +47,18 @@ class EmailFinder:
         strategies = self.EFFORT_STRATEGIES.get(self.effort, self.EFFORT_STRATEGIES[2])
         seen_emails = set()
 
-        # Pre-fetch about page (shared by youtube_about and youtube_links)
-        about_url = channel_url.rstrip("/") + "/about"
-        about_html = fetch_with_retry(about_url, self.max_retries, self.delay_ms)
+        # Fetch channel main page (YouTube deprecated /about as separate URL)
+        channel_page_url = channel_url.rstrip("/")
+        channel_html = fetch_with_retry(channel_page_url, self.max_retries, self.delay_ms)
+
+        # Extract subscriber_count from channel page HTML
+        channel_subscriber_count = extract_subscriber_count(channel_html) if channel_html else None
 
         ctx = {
-            "about_html": about_html,
-            "about_url": about_url,
-            "channel_id": channel_id or self._extract_channel_id(channel_url, about_html),
+            "about_html": channel_html,
+            "about_url": channel_page_url,
+            "channel_id": channel_id or self._extract_channel_id(channel_url, channel_html),
+            "subscriber_count": channel_subscriber_count,
         }
 
         for strategy_name in strategies:
@@ -63,6 +68,8 @@ class EmailFinder:
 
             try:
                 for lead in method(channel_name, channel_url, ctx):
+                    # Propagate subscriber_count to all leads
+                    lead.setdefault("subscriber_count", ctx.get("subscriber_count"))
                     email_lower = lead["email"].lower()
                     if email_lower not in seen_emails:
                         seen_emails.add(email_lower)
@@ -74,14 +81,14 @@ class EmailFinder:
             if strategy_name != strategies[-1]:
                 time.sleep(self.delay_ms / 1000 * 0.3)
 
-    # ── Strategy: YouTube About Page ──
+    # ── Strategy: YouTube Channel Page ──
 
     def _search_youtube_about(self, channel_name, channel_url, ctx):
         html = ctx["about_html"]
         if not html:
             return
 
-        # Extract from page text
+        # Strategy 1: Extract from visible page text
         emails = extract_emails_from_html(html)
         for email in emails:
             if is_valid_email(email):
@@ -92,25 +99,73 @@ class EmailFinder:
                     "evidence_link": ctx["about_url"],
                     "confidence_score": 0.8,
                     "source": "youtube_about",
+                    "source_platform": "youtube",
+                    "source_type": "profile_page",
+                    "source_url": ctx["about_url"],
                 }
 
-        # Extract from ytInitialData JSON blob
-        for match in re.finditer(
-            r"var ytInitialData\s*=\s*(\{.+?\});\s*</script>", html, re.DOTALL
-        ):
-            data_str = match.group(1)
-            for email in set(
-                re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", data_str)
-            ):
-                if is_valid_email(email):
-                    yield {
-                        "email": email,
-                        "channel_name": channel_name,
-                        "channel_url": channel_url,
-                        "evidence_link": ctx["about_url"],
-                        "confidence_score": 0.75,
-                        "source": "youtube_data",
-                    }
+        # Strategy 2: Parse ytInitialData for channel description (most reliable)
+        found_from_description = False
+        match = re.search(
+            r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL
+        )
+        if match:
+            try:
+                data = json.loads(match.group(1))
+
+                # Extract channel description from metadata
+                description = (
+                    data
+                    .get("metadata", {})
+                    .get("channelMetadataRenderer", {})
+                    .get("description", "")
+                )
+                if description:
+                    for email in set(
+                        re.findall(
+                            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                            description,
+                        )
+                    ):
+                        if is_valid_email(email):
+                            found_from_description = True
+                            yield {
+                                "email": email,
+                                "channel_name": channel_name,
+                                "channel_url": channel_url,
+                                "evidence_link": ctx["about_url"],
+                                "confidence_score": 0.85,
+                                "source": "youtube_description",
+                                "source_platform": "youtube",
+                                "source_type": "about_page",
+                                "source_url": ctx["about_url"],
+                            }
+
+            except json.JSONDecodeError:
+                pass
+
+            # Strategy 3: Broad email scan across ytInitialData (fallback only)
+            # Only if structured description parsing found nothing
+            if not found_from_description:
+                data_str = match.group(1)
+                for email in set(
+                    re.findall(
+                        r"(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+                        data_str,
+                    )
+                ):
+                    if is_valid_email(email):
+                        yield {
+                            "email": email,
+                            "channel_name": channel_name,
+                            "channel_url": channel_url,
+                            "evidence_link": ctx["about_url"],
+                            "confidence_score": 0.75,
+                            "source": "youtube_data",
+                            "source_platform": "youtube",
+                            "source_type": "profile_page",
+                            "source_url": ctx["about_url"],
+                        }
 
     # ── Strategy: YouTube External Links ──
 
@@ -135,6 +190,9 @@ class EmailFinder:
                         "evidence_link": link,
                         "confidence_score": 0.6,
                         "source": "youtube_link",
+                        "source_platform": "website",
+                        "source_type": "external_site",
+                        "source_url": link,
                     }
 
     # ── Strategy: Web Search ──
@@ -170,6 +228,9 @@ class EmailFinder:
                             "evidence_link": result_url,
                             "confidence_score": 0.7,
                             "source": "web_search",
+                            "source_platform": "website",
+                            "source_type": "external_site",
+                            "source_url": result_url,
                         }
 
     # ── Strategy: Aggregator Sites ──
@@ -195,6 +256,9 @@ class EmailFinder:
                         "evidence_link": playboard_url,
                         "confidence_score": 0.65,
                         "source": "playboard",
+                        "source_platform": "website",
+                        "source_type": "external_site",
+                        "source_url": playboard_url,
                     }
 
     # ── Strategy: Creator Website Deep Scan ──
@@ -245,6 +309,9 @@ class EmailFinder:
                         "evidence_link": site_url,
                         "confidence_score": 0.7,
                         "source": "creator_website",
+                        "source_platform": "website",
+                        "source_type": "profile_page",
+                        "source_url": site_url,
                     }
 
             # Follow contact/about pages on the creator's site
@@ -272,6 +339,9 @@ class EmailFinder:
                             "evidence_link": link,
                             "confidence_score": 0.7,
                             "source": "creator_website",
+                            "source_platform": "website",
+                            "source_type": "contact_page",
+                            "source_url": link,
                         }
 
     # ── Helpers ──
@@ -301,8 +371,17 @@ class EmailFinder:
 
         return urls[:5]
 
+    # Domains that are YouTube/Google internal — not creator-owned
+    _INTERNAL_DOMAINS = {
+        "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be",
+        "googlevideo.com", "ytimg.com", "ggpht.com", "gstatic.com",
+        "google.com", "googleapis.com", "accounts.google.com",
+        "googleusercontent.com", "googleadservices.com",
+        "play.google.com", "support.google.com",
+    }
+
     def _extract_youtube_external_links(self, html):
-        """Extract external links from YouTube channel page."""
+        """Extract external links from YouTube channel page (skip YouTube/Google internal URLs)."""
         links = []
 
         for match in re.finditer(r'q=https?%3A%2F%2F([^"&]+)', html):
@@ -314,7 +393,14 @@ class EmailFinder:
         ):
             links.append(match.group(1))
 
-        return list(set(links))
+        # Filter out YouTube/Google internal domains
+        filtered = []
+        for link in set(links):
+            domain = urlparse(link).netloc.lower()
+            if not any(domain.endswith(internal) for internal in self._INTERNAL_DOMAINS):
+                filtered.append(link)
+
+        return filtered
 
     def _extract_channel_id(self, channel_url, html=None):
         """Extract YouTube channel ID from URL or page HTML."""

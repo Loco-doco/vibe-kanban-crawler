@@ -1,7 +1,12 @@
 import time
 import sys
 import requests
+from urllib.parse import urlparse
 from config import USER_AGENT, REQUEST_TIMEOUT
+
+# YouTube consent bypass cookies
+_YOUTUBE_COOKIES = {"CONSENT": "YES+cb.20210328-17-p0.en+FX+684"}
+_YOUTUBE_DOMAINS = {"youtube.com", "www.youtube.com", "m.youtube.com"}
 
 
 def fetch_with_retry(url, max_retries=3, delay_ms=2000, timeout=None):
@@ -9,12 +14,16 @@ def fetch_with_retry(url, max_retries=3, delay_ms=2000, timeout=None):
     timeout = timeout or REQUEST_TIMEOUT
     headers = {
         "User-Agent": USER_AGENT,
-        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     }
+
+    # Auto-add YouTube consent cookies
+    domain = urlparse(url).netloc.lower()
+    cookies = _YOUTUBE_COOKIES if domain in _YOUTUBE_DOMAINS else {}
 
     for attempt in range(max_retries + 1):
         try:
-            resp = requests.get(url, headers=headers, timeout=timeout)
+            resp = requests.get(url, headers=headers, timeout=timeout, cookies=cookies)
 
             if resp.status_code == 200:
                 return resp.text

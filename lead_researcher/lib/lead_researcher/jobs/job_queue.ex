@@ -27,6 +27,8 @@ defmodule LeadResearcher.Jobs.JobQueue do
       queue: :queue.new()
     }
 
+    # Recover stale jobs from previous server crash/restart
+    recover_stale_jobs()
     schedule_poll()
     {:ok, state}
   end
@@ -43,7 +45,7 @@ defmodule LeadResearcher.Jobs.JobQueue do
       %{pid: pid} -> Process.exit(pid, :shutdown)
     end
 
-    Jobs.update_job_status(job_id, "cancelled")
+    # DB update is handled by the controller calling Jobs.cancel_job
     state = %{state | running: Map.delete(state.running, job_id)}
     {:noreply, drain_queue(state)}
   end
@@ -62,8 +64,14 @@ defmodule LeadResearcher.Jobs.JobQueue do
           Logger.error("Job #{job_id} failed: #{inspect(reason)}")
 
         _ ->
-          Jobs.update_job_status(job_id, "completed", %{completed_at: DateTime.utc_now()})
-          Logger.info("Job #{job_id} completed successfully")
+          final_status = Jobs.determine_completion_status(job_id)
+          Jobs.update_job_status(job_id, final_status, %{completed_at: DateTime.utc_now()})
+          Logger.info("Job #{job_id} finished with status: #{final_status}")
+
+          # Auto post-processing hooks for discovery jobs
+          if final_status in ["completed", "completed_low_yield"] do
+            schedule_post_processing(job_id)
+          end
       end
     end
 
@@ -149,7 +157,70 @@ defmodule LeadResearcher.Jobs.JobQueue do
     end
   end
 
+  # Post-processing: subscriber backfill → channel enrichment (sequential, fire-and-forget)
+  defp schedule_post_processing(job_id) do
+    job = Jobs.get_job!(job_id)
+
+    # Only auto-enrich primary discovery jobs (not supplementary or URL-mode jobs)
+    if job.mode == "discovery" and is_nil(job.parent_job_id) do
+      Logger.info("Scheduling post-processing for job #{job_id}")
+
+      Task.Supervisor.start_child(LeadResearcher.TaskSupervisor, fn ->
+        try do
+          # Step 1: subscriber backfill
+          Logger.info("Job #{job_id}: auto subscriber backfill starting")
+          case Runner.run_enrich_subscribers(job_id) do
+            {:ok, count} ->
+              Logger.info("Job #{job_id}: auto subscriber backfill done (#{count} updated)")
+            {:error, reason} ->
+              Logger.warning("Job #{job_id}: auto subscriber backfill failed: #{inspect(reason)}")
+          end
+
+          # Step 2: channel enrichment
+          Logger.info("Job #{job_id}: auto channel enrichment starting")
+          case Runner.run_enrich_channels(job_id) do
+            {:ok, count} ->
+              Logger.info("Job #{job_id}: auto channel enrichment done (#{count} enriched)")
+            {:error, reason} ->
+              Logger.warning("Job #{job_id}: auto channel enrichment failed: #{inspect(reason)}")
+          end
+        rescue
+          e ->
+            Logger.error("Job #{job_id}: post-processing error: #{inspect(e)}")
+        end
+      end)
+    else
+      Logger.debug("Skipping post-processing for job #{job_id} (not a primary discovery job)")
+    end
+  end
+
   defp schedule_poll do
     Process.send_after(self(), :poll, @poll_interval)
+  end
+
+  # On startup, mark any jobs stuck in running/partial_results as completed_low_yield.
+  # These were interrupted by server restart (crawler process is gone).
+  defp recover_stale_jobs do
+    import Ecto.Query
+
+    stale_statuses = ["running", "partial_results"]
+
+    stale_jobs =
+      Jobs.Job
+      |> where([j], j.status in ^stale_statuses)
+      |> LeadResearcher.Repo.all()
+
+    for job <- stale_jobs do
+      Logger.warning("Recovering stale job ##{job.id} (was #{job.status})")
+      Jobs.update_job(job, %{
+        status: "completed_low_yield",
+        termination_reason: job.termination_reason || "system_error",
+        completed_at: DateTime.utc_now()
+      })
+    end
+
+    if length(stale_jobs) > 0 do
+      Logger.info("Recovered #{length(stale_jobs)} stale job(s)")
+    end
   end
 end

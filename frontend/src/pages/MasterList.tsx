@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getMasterList, removeFromMasterList } from '../api/masterList'
 import StatusBadge from '../components/StatusBadge'
+import { formatDate } from '../utils/datetime'
 import type { MasterListLead } from '../types'
 import { PLATFORM_LABELS } from '../types'
 
@@ -97,7 +98,7 @@ export default function MasterList() {
       l.channel_name || '',
       l.subscriber_count || '',
       l.status,
-      new Date(l.inserted_at).toLocaleDateString('ko-KR'),
+      formatDate(l.inserted_at),
     ])
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
@@ -225,7 +226,7 @@ export default function MasterList() {
                     <td>{formatSubscribers(lead.subscriber_count)}</td>
                     <td><StatusBadge status={lead.status} /></td>
                     <td style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>
-                      {new Date(lead.inserted_at).toLocaleDateString('ko-KR')}
+                      {formatDate(lead.inserted_at)}
                     </td>
                     <td>
                       <button

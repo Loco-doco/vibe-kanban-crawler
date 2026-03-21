@@ -31,6 +31,10 @@ defmodule LeadResearcherWeb.JobJSON do
       completed_at: job.completed_at,
       inserted_at: job.inserted_at,
       updated_at: job.updated_at,
+      termination_reason: job.termination_reason,
+      crawl_stats: safe_decode_json(job.crawl_stats, nil),
+      parent_job_id: job.parent_job_id,
+      supplementary_type: job.supplementary_type,
       progress: %{
         collected: collected,
         target: target,

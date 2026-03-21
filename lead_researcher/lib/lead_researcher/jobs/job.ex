@@ -4,7 +4,7 @@ defmodule LeadResearcher.Jobs.Job do
 
   schema "jobs" do
     field :targets, :string
-    field :status, :string, default: "pending"
+    field :status, :string, default: "queued"
     field :max_retries, :integer, default: 3
     field :delay_ms, :integer, default: 2000
     field :max_depth, :integer, default: 3
@@ -22,8 +22,16 @@ defmodule LeadResearcher.Jobs.Job do
     field :label, :string
     field :mode, :string, default: "url"
     field :keywords, :string
+    field :termination_reason, :string
+    field :crawl_stats, :string
+
+    # Supplementary search linkage
+    field :parent_job_id, :integer
+    field :supplementary_type, :string
 
     has_many :leads, LeadResearcher.Leads.Lead
+    has_many :supplementary_jobs, LeadResearcher.Jobs.Job, foreign_key: :parent_job_id
+    belongs_to :parent_job, LeadResearcher.Jobs.Job, foreign_key: :parent_job_id, define_field: false
 
     timestamps()
   end
@@ -34,10 +42,12 @@ defmodule LeadResearcher.Jobs.Job do
       :targets, :status, :max_retries, :delay_ms, :max_depth,
       :total_leads_found, :error_message, :started_at, :completed_at,
       :platform, :category_tags, :target_count, :subscriber_min,
-      :subscriber_max, :extra_conditions, :label, :mode, :keywords
+      :subscriber_max, :extra_conditions, :label, :mode, :keywords,
+      :termination_reason, :crawl_stats,
+      :parent_job_id, :supplementary_type
     ])
     |> validate_required([:targets])
-    |> validate_inclusion(:status, ~w(pending running completed failed cancelled))
+    |> validate_inclusion(:status, ~w(draft queued running partial_results completed completed_low_yield failed cancelled))
     |> validate_inclusion(:mode, ~w(url discovery))
     |> validate_number(:max_retries, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
     |> validate_number(:delay_ms, greater_than_or_equal_to: 0)

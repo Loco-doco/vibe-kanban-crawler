@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, string> = {
   '/': '대시보드',
-  '/collection': '리드 수집',
+  '/collection': '리드 파이프라인',
   '/leads': '전체 리드',
   '/master-list': '마스터 리스트',
   '/campaigns': '캠페인',
