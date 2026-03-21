@@ -2,15 +2,15 @@ import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, string> = {
   '/': '대시보드',
-  '/collection': '리드 파이프라인',
-  '/leads': '전체 리드',
-  '/master-list': '마스터 리스트',
+  '/search/new': '새 탐색',
+  '/search/active': '진행 중인 탐색',
+  '/review': '리드 검토',
+  '/contacts': '연락 대상',
   '/campaigns': '캠페인',
   '/templates': '템플릿',
-  '/sequences': '시퀀스',
-  '/reports': '리포트',
-  '/performance': '성과 분석',
-  '/settings': '설정',
+  '/admin/leads': '전체 리드 DB',
+  '/admin/import': '데이터 가져오기',
+  '/admin/settings': '시스템 설정',
   '/help': '도움말',
 }
 
