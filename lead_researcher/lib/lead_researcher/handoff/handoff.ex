@@ -181,6 +181,60 @@ defmodule LeadResearcher.Handoff do
     end)
   end
 
+  @doc """
+  Resolve a conflict for a single lead.
+
+  - "keep": Operator confirms this is NOT a duplicate → move to ready_to_sync
+  - "reject": Operator confirms this IS a duplicate → reject and remove from pipeline
+  """
+  def resolve_conflict(lead_id, "keep") do
+    lead = Repo.get!(Lead, lead_id)
+
+    lead
+    |> Ecto.Changeset.change(%{master_sync_status: "ready_to_sync", conflict_details: nil})
+    |> Repo.update()
+  end
+
+  def resolve_conflict(lead_id, "reject") do
+    lead = Repo.get!(Lead, lead_id)
+
+    lead
+    |> Ecto.Changeset.change(%{
+      master_sync_status: "not_synced",
+      review_status: "rejected",
+      conflict_details: nil
+    })
+    |> Repo.update()
+  end
+
+  @doc """
+  Bulk resolve conflicts: apply the same resolution to multiple leads.
+  Returns {:ok, %{resolved: count}}
+  """
+  def bulk_resolve_conflicts(lead_ids, resolution) when resolution in ["keep", "reject"] do
+    results = Enum.map(lead_ids, fn id -> resolve_conflict(id, resolution) end)
+    resolved = Enum.count(results, &match?({:ok, _}, &1))
+    {:ok, %{resolved: resolved}}
+  end
+
+  @doc """
+  Final sync: move ready_to_sync leads to synced.
+  Only leads currently in ready_to_sync are affected (WHERE guard).
+  Returns {:ok, %{synced: count}}
+  """
+  def sync_to_master(lead_ids) when is_list(lead_ids) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {count, _} =
+      from(l in Lead,
+        where: l.id in ^lead_ids,
+        where: l.master_sync_status == "ready_to_sync"
+      )
+      |> Repo.update_all(set: [master_sync_status: "synced", updated_at: now])
+
+    {:ok, %{synced: count}}
+  end
+
   # --- Private helpers ---
 
   defp non_empty?(nil), do: false

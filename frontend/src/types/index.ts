@@ -156,6 +156,10 @@ export interface QualityMetrics {
   needs_verification_leads: number
   needs_correction_leads: number
   excluded_leads: number
+  // Master pipeline counts (B1+B2)
+  conflict_queue_leads: number
+  ready_to_sync_leads: number
+  synced_leads: number
 }
 
 export interface EditHistoryEntry {

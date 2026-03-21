@@ -340,6 +340,19 @@ defmodule LeadResearcher.Leads do
     where(query, [l], l.review_status in ["auto_rejected", "rejected"])
   end
 
+  # Master pipeline queues (B1+B2)
+  defp maybe_filter_action_queue(query, %{"action_queue" => "conflict_queue"}) do
+    where(query, [l], l.master_sync_status == "conflict_queue")
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "ready_to_sync"}) do
+    where(query, [l], l.master_sync_status == "ready_to_sync")
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "synced"}) do
+    where(query, [l], l.master_sync_status == "synced")
+  end
+
   defp maybe_filter_action_queue(query, _), do: query
 
   defp maybe_search(query, %{"search" => search}) when is_binary(search) and search != "" do

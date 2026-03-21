@@ -54,6 +54,29 @@ export async function approveAndQueue(leadIds: number[]): Promise<ApproveAndQueu
   return data
 }
 
+export async function resolveConflict(leadId: number, resolution: 'keep' | 'reject'): Promise<Lead> {
+  const { data } = await api.post<{ data: Lead }>('/leads/resolve-conflict', {
+    lead_id: leadId,
+    resolution,
+  })
+  return data.data
+}
+
+export async function bulkResolveConflicts(leadIds: number[], resolution: 'keep' | 'reject'): Promise<{ resolved: number }> {
+  const { data } = await api.post<{ resolved: number }>('/leads/bulk-resolve-conflicts', {
+    lead_ids: leadIds,
+    resolution,
+  })
+  return data
+}
+
+export async function syncToMaster(leadIds: number[]): Promise<{ synced: number }> {
+  const { data } = await api.post<{ synced: number }>('/leads/sync-to-master', {
+    lead_ids: leadIds,
+  })
+  return data
+}
+
 export async function getQuality(jobId: number): Promise<QualityMetrics> {
   const { data } = await api.get<{ data: QualityMetrics }>(`/quality/jobs/${jobId}`)
   return data.data

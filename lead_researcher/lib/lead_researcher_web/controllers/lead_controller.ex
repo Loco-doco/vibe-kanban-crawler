@@ -75,6 +75,27 @@ defmodule LeadResearcherWeb.LeadController do
     })
   end
 
+  @doc "Resolve a conflict: keep (→ ready_to_sync) or reject (→ rejected/not_synced)"
+  def resolve_conflict(conn, %{"lead_id" => lead_id, "resolution" => resolution})
+      when resolution in ["keep", "reject"] do
+    {:ok, lead} = LeadResearcher.Handoff.resolve_conflict(lead_id, resolution)
+    lead = LeadResearcher.Repo.preload(lead, :enrichment)
+    render(conn, :show, lead: lead)
+  end
+
+  @doc "Bulk resolve conflicts"
+  def bulk_resolve_conflicts(conn, %{"lead_ids" => lead_ids, "resolution" => resolution})
+      when is_list(lead_ids) and resolution in ["keep", "reject"] do
+    {:ok, result} = LeadResearcher.Handoff.bulk_resolve_conflicts(lead_ids, resolution)
+    json(conn, %{resolved: result.resolved})
+  end
+
+  @doc "Final sync: ready_to_sync → synced"
+  def sync_to_master(conn, %{"lead_ids" => lead_ids}) when is_list(lead_ids) do
+    {:ok, result} = LeadResearcher.Handoff.sync_to_master(lead_ids)
+    json(conn, %{synced: result.synced})
+  end
+
   def edit_history(conn, %{"id" => id}) do
     history = EditHistories.list_for_lead(String.to_integer(id))
 

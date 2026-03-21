@@ -57,7 +57,11 @@ defmodule LeadResearcher.Quality do
         l.review_status not in ["rejected", "auto_rejected"] and
           ((not has_effective_audience?(l)) or l.enrichment_status in ["not_started", "failed"])
       end),
-      excluded_leads: Enum.count(leads, &(&1.review_status in ["auto_rejected", "rejected"]))
+      excluded_leads: Enum.count(leads, &(&1.review_status in ["auto_rejected", "rejected"])),
+      # Master pipeline counts (B1+B2)
+      conflict_queue_leads: Enum.count(leads, &(&1.master_sync_status == "conflict_queue")),
+      ready_to_sync_leads: Enum.count(leads, &(&1.master_sync_status == "ready_to_sync")),
+      synced_leads: Enum.count(leads, &(&1.master_sync_status == "synced"))
     }
   end
 

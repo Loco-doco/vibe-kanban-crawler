@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
 import type { EnrichmentRun } from '../api/jobs'
-import { getLeads, getQuality, bulkReview, approveAndQueue } from '../api/leads'
+import { getLeads, getQuality, bulkReview, approveAndQueue, bulkResolveConflicts, syncToMaster } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
 import QualityBanner from './QualityBanner'
@@ -25,13 +25,20 @@ type EnrichState = 'idle' | 'running' | 'done' | 'error'
 
 // L1 Primary queue — the only mechanism that changes the result set
 type ActionQueue = 'needs_verification' | 'contactable' | 'needs_correction' | 'held' | 'excluded'
+  | 'conflict_queue' | 'ready_to_sync' | 'synced'
 
-const QUEUE_TABS: { value: ActionQueue; label: string }[] = [
+const REVIEW_TABS: { value: ActionQueue; label: string }[] = [
   { value: 'needs_verification', label: '검증 필요' },
   { value: 'contactable', label: '연락 대상' },
   { value: 'needs_correction', label: '데이터 보정 필요' },
   { value: 'held', label: '보류' },
   { value: 'excluded', label: '제외' },
+]
+
+const PIPELINE_TABS: { value: ActionQueue; label: string }[] = [
+  { value: 'conflict_queue', label: '충돌 확인' },
+  { value: 'ready_to_sync', label: '반영 대기' },
+  { value: 'synced', label: '반영 완료' },
 ]
 
 const QUEUE_LABELS: Record<ActionQueue, string> = {
@@ -40,6 +47,9 @@ const QUEUE_LABELS: Record<ActionQueue, string> = {
   needs_correction: '데이터 보정 필요',
   held: '보류',
   excluded: '제외',
+  conflict_queue: '충돌 확인',
+  ready_to_sync: '반영 대기',
+  synced: '반영 완료',
 }
 
 export default function ReviewWorkspace({ initialJobId }: Props) {
@@ -158,6 +168,34 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     },
   })
 
+  // Bulk resolve conflicts (conflict_queue → keep/reject)
+  const resolveConflictsMutation = useMutation({
+    mutationFn: ({ ids, resolution }: { ids: number[]; resolution: 'keep' | 'reject' }) =>
+      bulkResolveConflicts(ids, resolution),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      setLastBulkResult({
+        action: variables.resolution === 'keep' ? 'approved' : 'rejected',
+        count: result.resolved,
+      })
+      setSelectedLeadIds(new Set())
+      setTimeout(() => setLastBulkResult(null), 4000)
+    },
+  })
+
+  // Final sync: ready_to_sync → synced
+  const syncMutation = useMutation({
+    mutationFn: (ids: number[]) => syncToMaster(ids),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['quality'] })
+      setLastBulkResult({ action: 'approved', count: result.synced, synced: result.synced })
+      setSelectedLeadIds(new Set())
+      setTimeout(() => setLastBulkResult(null), 4000)
+    },
+  })
+
   // Derive drawer lead from fresh query data
   const drawerLead = drawerLeadId && leads ? leads.find(l => l.id === drawerLeadId) ?? null : null
 
@@ -170,6 +208,9 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       case 'needs_correction': return quality.needs_correction_leads
       case 'held': return quality.held_leads
       case 'excluded': return quality.excluded_leads
+      case 'conflict_queue': return quality.conflict_queue_leads
+      case 'ready_to_sync': return quality.ready_to_sync_leads
+      case 'synced': return quality.synced_leads
       default: return quality.total_leads
     }
   }, [quality, activeQueue])
@@ -244,14 +285,20 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     }
   }, [leads, selectedLeadIds.size])
 
-  const handleBulkAction = useCallback((status: ReviewStatus) => {
+  const handleBulkAction = useCallback((status: ReviewStatus | 'sync' | 'conflict_keep' | 'conflict_reject') => {
     const ids = Array.from(selectedLeadIds)
     if (status === 'approved') {
       approveMutation.mutate(ids)
+    } else if (status === 'sync') {
+      syncMutation.mutate(ids)
+    } else if (status === 'conflict_keep') {
+      resolveConflictsMutation.mutate({ ids, resolution: 'keep' })
+    } else if (status === 'conflict_reject') {
+      resolveConflictsMutation.mutate({ ids, resolution: 'reject' })
     } else {
       bulkMutation.mutate({ ids, status })
     }
-  }, [selectedLeadIds, bulkMutation, approveMutation])
+  }, [selectedLeadIds, bulkMutation, approveMutation, syncMutation, resolveConflictsMutation])
 
   const handleViewDetail = useCallback((lead: Lead) => {
     setDrawerLeadId(lead.id)
@@ -360,7 +407,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
 
             {/* L1: Work Queue Tabs — primary queue, mutually exclusive */}
             <div className="review-queue-tabs">
-              {QUEUE_TABS.map(tab => (
+              {REVIEW_TABS.map(tab => (
                 <button
                   key={tab.value}
                   className={`queue-tab${activeQueue === tab.value ? ' active' : ''}`}
@@ -374,6 +421,24 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
                         : tab.value === 'needs_correction' ? quality.needs_correction_leads
                         : tab.value === 'held' ? quality.held_leads
                         : tab.value === 'excluded' ? quality.excluded_leads
+                        : 0}
+                    </span>
+                  )}
+                </button>
+              ))}
+              <span className="queue-tab-divider" />
+              {PIPELINE_TABS.map(tab => (
+                <button
+                  key={tab.value}
+                  className={`queue-tab pipeline-tab${activeQueue === tab.value ? ' active' : ''}`}
+                  onClick={() => handleQueueChange(tab.value)}
+                >
+                  {tab.label}
+                  {quality && (
+                    <span className="queue-tab-count">
+                      {tab.value === 'conflict_queue' ? quality.conflict_queue_leads
+                        : tab.value === 'ready_to_sync' ? quality.ready_to_sync_leads
+                        : tab.value === 'synced' ? quality.synced_leads
                         : 0}
                     </span>
                   )}
@@ -448,10 +513,11 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
             <BulkActions
               selectedCount={selectedLeadIds.size}
               totalFilteredCount={leads?.length ?? 0}
+              activeQueue={activeQueue}
               onAction={handleBulkAction}
               onSelectAll={handleToggleSelectAll}
               onDeselectAll={() => setSelectedLeadIds(new Set())}
-              disabled={bulkMutation.isPending || approveMutation.isPending}
+              disabled={bulkMutation.isPending || approveMutation.isPending || syncMutation.isPending || resolveConflictsMutation.isPending}
               lastResult={lastBulkResult}
             />
 
@@ -482,6 +548,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       {drawerLead && (
         <LeadDetailDrawer
           lead={drawerLead}
+          activeQueue={activeQueue}
           onClose={handleCloseDrawer}
           onUpdated={handleLeadUpdated}
           onOpenFullDetail={() => { setFullDetailLeadId(drawerLead.id); setDrawerLeadId(null) }}
@@ -549,6 +616,23 @@ const QUEUE_EMPTY_CONFIG: Record<ActionQueue, { icon: string; title: string; des
     icon: '\uD83D\uDDD1',
     title: '제외된 리드가 없습니다',
     description: '제외된 리드가 없습니다.',
+  },
+  conflict_queue: {
+    icon: '\u2705',
+    title: '충돌 리드가 없습니다',
+    description: '모든 충돌이 해결되었거나 충돌이 감지된 리드가 없습니다.',
+  },
+  ready_to_sync: {
+    icon: '\uD83D\uDCCB',
+    title: '반영 대기 리드가 없습니다',
+    description: '승인된 리드가 없거나 모두 반영되었습니다.',
+    actionLabel: '검증 필요 큐로 이동',
+    actionQueue: 'needs_verification',
+  },
+  synced: {
+    icon: '\u2705',
+    title: '반영된 리드가 없습니다',
+    description: '아직 마스터에 반영된 리드가 없습니다.',
   },
 }
 

@@ -2318,6 +2318,7 @@ body {
 .bulk-approve { background: var(--success-light); color: var(--success-dark); border-color: #bbf7d0; }
 .bulk-reject { background: var(--danger-light); color: var(--danger); border-color: #fca5a5; }
 .bulk-hold { background: var(--gray-100); color: var(--gray-600); border-color: var(--gray-200); }
+.bulk-sync { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
 
 .bulk-actions-left { display: flex; align-items: center; gap: 8px; flex: 1; }
 
@@ -3061,6 +3062,61 @@ body {
 .queue-tab.active .queue-tab-count {
   background: rgba(99, 102, 241, 0.1);
   color: var(--primary-600);
+}
+
+.queue-tab-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--gray-200);
+  margin: 0 4px;
+  align-self: center;
+}
+
+.pipeline-tab.active {
+  color: #1e40af;
+  border-bottom-color: #3b82f6;
+}
+
+.pipeline-tab.active .queue-tab-count {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1e40af;
+}
+
+/* Sync status badges */
+.sync-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.sync-badge.master_review_queue { background: #fef3c7; color: #92400e; }
+.sync-badge.ready_to_sync { background: #dbeafe; color: #1e40af; }
+.sync-badge.conflict_queue { background: #fee2e2; color: #991b1b; }
+.sync-badge.synced { background: #d1fae5; color: #065f46; }
+
+/* Conflict details in drawer */
+.conflict-details-section {
+  margin-bottom: 8px;
+}
+
+.conflict-details-section .quick-detail-issues {
+  font-size: 0.78rem;
+}
+
+.conflict-value {
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+.conflict-score {
+  color: #d97706;
+  font-size: 0.72rem;
+}
+
+.conflict-existing {
+  color: var(--gray-400);
+  font-size: 0.72rem;
 }
 
 /* ===== Filter Status Bar ===== */
