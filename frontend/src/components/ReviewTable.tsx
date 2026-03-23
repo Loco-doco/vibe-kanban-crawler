@@ -45,6 +45,29 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
   return { label: '검토 필요', priority: 'medium' }
 }
 
+interface QualityFlag {
+  key: string
+  label: string
+  severity: 'error' | 'warning' | 'info'
+}
+
+function getQualityFlags(lead: Lead): QualityFlag[] {
+  const flags: QualityFlag[] = []
+  if (lead.contact_readiness === 'no_email')
+    flags.push({ key: 'no_email', label: '이메일 없음', severity: 'error' })
+  if (lead.contact_readiness === 'platform_suspect')
+    flags.push({ key: 'platform_suspect', label: '플랫폼 메일 의심', severity: 'warning' })
+  if (is_nil(lead.subscriber_count) && is_nil(lead.audience_size_override))
+    flags.push({ key: 'no_audience', label: '영향력 미수집', severity: 'warning' })
+  if (lead.enrichment_status === 'not_started')
+    flags.push({ key: 'no_enrichment', label: '보강 미시작', severity: 'info' })
+  if (lead.enrichment_status === 'failed')
+    flags.push({ key: 'enrich_fail', label: '보강 실패', severity: 'warning' })
+  return flags
+}
+
+function is_nil(v: unknown): boolean { return v === null || v === undefined }
+
 interface Props {
   leads: Lead[]
   selectedIds: Set<number>
@@ -125,6 +148,11 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                       {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
                     </span>
                   )}
+                  {getQualityFlags(lead).map(flag => (
+                    <span key={flag.key} className={`quality-flag ${flag.severity}`} title={flag.label}>
+                      {flag.severity === 'error' ? '\u26A0' : '\u25CB'}
+                    </span>
+                  ))}
                 </td>
                 <td>
                   <span className={`action-label ${action.priority}`} title={action.label}>

@@ -69,8 +69,8 @@ export default function BulkActions({
       )
     }
 
-    // "excluded" or "held" — offer re-review
-    if (activeQueue === 'excluded' || activeQueue === 'held') {
+    // "excluded" or "on_hold" — offer re-review
+    if (activeQueue === 'excluded' || activeQueue === 'on_hold' || activeQueue === 'held') {
       return (
         <div className="bulk-actions-buttons">
           <button className="btn btn-sm bulk-approve" onClick={() => setConfirmAction('needs_review')} disabled={disabled}>
