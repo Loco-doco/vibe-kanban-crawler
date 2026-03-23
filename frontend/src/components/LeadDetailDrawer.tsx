@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateLead, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
+import { bulkReview, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
+import type { ReviewStatus } from '../types'
 import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
@@ -43,8 +44,8 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     onUpdated()
   }
 
-  const updateMutation = useMutation({
-    mutationFn: (fields: Partial<Lead>) => updateLead(lead.id, fields),
+  const reviewMutation = useMutation({
+    mutationFn: (status: ReviewStatus) => bulkReview([lead.id], status),
     onSuccess: invalidateAll,
   })
 
@@ -67,11 +68,11 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     if (status === 'approved') {
       approveMutation.mutate()
     } else {
-      updateMutation.mutate({ review_status: status } as Partial<Lead>)
+      reviewMutation.mutate(status as ReviewStatus)
     }
   }
 
-  const isPending = updateMutation.isPending || approveMutation.isPending ||
+  const isPending = reviewMutation.isPending || approveMutation.isPending ||
     resolveConflictMutation.isPending || syncMutation.isPending
 
   const action = getRecommendedAction(lead)
@@ -187,17 +188,17 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
           <button
             className="judgment-btn approve"
             onClick={() => handleReviewAction('approved')}
-            disabled={lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'}
-          >승인 + 대기열</button>
+            disabled={isPending || lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'}
+          >연락 대상으로 이동</button>
           <button
             className="judgment-btn hold"
             onClick={() => handleReviewAction('held')}
-            disabled={lead.review_status === 'held'}
+            disabled={isPending || lead.review_status === 'held'}
           >보류</button>
           <button
             className="judgment-btn reject"
             onClick={() => handleReviewAction('rejected')}
-            disabled={lead.review_status === 'rejected'}
+            disabled={isPending || lead.review_status === 'rejected'}
           >제외</button>
         </div>
       </div>
