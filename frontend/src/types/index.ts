@@ -148,18 +148,22 @@ export interface QualityMetrics {
   enrichment_coverage_rate: number
   judgment: QualityJudgment
   suggested_supplement: SupplementaryType | null
-  contactable_leads: number
   platform_suspect_leads: number
   no_email_leads: number
+  // Workflow state counts (mutually exclusive)
+  unreviewed_leads: number
+  needs_enrichment_leads: number
+  contactable_leads: number
+  on_hold_leads: number
+  excluded_leads: number
+  synced_leads: number
+  conflict_queue_leads: number
+  ready_to_sync_leads: number
+  // Backward compat aliases
   needs_review_leads: number
   held_leads: number
   needs_verification_leads: number
   needs_correction_leads: number
-  excluded_leads: number
-  // Master pipeline counts (B1+B2)
-  conflict_queue_leads: number
-  ready_to_sync_leads: number
-  synced_leads: number
 }
 
 export interface EditHistoryEntry {

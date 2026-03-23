@@ -3861,3 +3861,24 @@ body {
   white-space: nowrap;
   max-width: 180px;
 }
+
+/* P5-2B: Quality flag indicators */
+.quality-flag {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.6rem;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.quality-flag.error {
+  color: var(--red-500, #ef4444);
+}
+
+.quality-flag.warning {
+  color: var(--amber-500, #f59e0b);
+}
+
+.quality-flag.info {
+  color: var(--gray-400, #9ca3af);
+}
