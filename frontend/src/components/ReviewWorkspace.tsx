@@ -20,28 +20,24 @@ const FINISHED_STATUSES = ['completed', 'completed_low_yield', 'failed', 'cancel
 
 type EnrichState = 'idle' | 'running' | 'done' | 'error'
 
-type ActionQueue = 'needs_verification' | 'contactable' | 'needs_correction' | 'held' | 'excluded'
-  | 'conflict_queue' | 'ready_to_sync' | 'synced'
+type ActionQueue = 'all' | 'unreviewed' | 'needs_enrichment' | 'contactable'
+  | 'excluded' | 'on_hold' | 'synced'
+  | 'ready_to_sync' | 'conflict_queue'
 
-// --- Inbox tab grouping (3+1) ---
-type InboxTabId = 'review' | 'contactable' | 'excluded' | 'synced'
+// --- Inbox tabs: mutually exclusive workflow states ---
+type InboxTabId = 'all' | 'unreviewed' | 'needs_enrichment' | 'contactable' | 'excluded' | 'synced'
 
 interface InboxTab {
   id: InboxTabId
   label: string
   primaryQueue: ActionQueue
-  subQueues: { value: ActionQueue; label: string }[]
+  subQueues?: { value: ActionQueue; label: string }[]
 }
 
 const INBOX_TABS: InboxTab[] = [
-  {
-    id: 'review', label: '검토 필요',
-    primaryQueue: 'needs_verification',
-    subQueues: [
-      { value: 'needs_verification', label: '검증 필요' },
-      { value: 'needs_correction', label: '보강 필요' },
-    ],
-  },
+  { id: 'all', label: '전체', primaryQueue: 'all' },
+  { id: 'unreviewed', label: '미검토', primaryQueue: 'unreviewed' },
+  { id: 'needs_enrichment', label: '보강 필요', primaryQueue: 'needs_enrichment' },
   {
     id: 'contactable', label: '연락 가능',
     primaryQueue: 'contactable',
@@ -52,30 +48,29 @@ const INBOX_TABS: InboxTab[] = [
     ],
   },
   {
-    id: 'excluded', label: '제외/보류',
+    id: 'excluded', label: '제외·보류',
     primaryQueue: 'excluded',
     subQueues: [
       { value: 'excluded', label: '제외' },
-      { value: 'held', label: '보류' },
+      { value: 'on_hold', label: '보류' },
     ],
   },
-  {
-    id: 'synced', label: '반영 완료',
-    primaryQueue: 'synced',
-    subQueues: [{ value: 'synced', label: '반영 완료' }],
-  },
+  { id: 'synced', label: '반영 완료', primaryQueue: 'synced' },
 ]
 
-function getQueueCount(quality: { needs_verification_leads: number; needs_correction_leads: number; contactable_leads: number; ready_to_sync_leads: number; conflict_queue_leads: number; excluded_leads: number; held_leads: number; synced_leads: number }, q: ActionQueue): number {
+import type { QualityMetrics } from '../types'
+
+function getQueueCount(quality: QualityMetrics, q: ActionQueue): number {
   switch (q) {
-    case 'needs_verification': return quality.needs_verification_leads
-    case 'needs_correction': return quality.needs_correction_leads
+    case 'all': return quality.total_leads
+    case 'unreviewed': return quality.unreviewed_leads
+    case 'needs_enrichment': return quality.needs_enrichment_leads
     case 'contactable': return quality.contactable_leads
+    case 'excluded': return quality.excluded_leads
+    case 'on_hold': return quality.on_hold_leads
+    case 'synced': return quality.synced_leads
     case 'ready_to_sync': return quality.ready_to_sync_leads
     case 'conflict_queue': return quality.conflict_queue_leads
-    case 'excluded': return quality.excluded_leads
-    case 'held': return quality.held_leads
-    case 'synced': return quality.synced_leads
     default: return 0
   }
 }
@@ -86,8 +81,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
   const [fullDetailLeadId, setFullDetailLeadId] = useState<number | null>(null)
 
-  const [activeTabId, setActiveTabId] = useState<InboxTabId>('review')
-  const [activeQueue, setActiveQueue] = useState<ActionQueue>('needs_verification')
+  const [activeTabId, setActiveTabId] = useState<InboxTabId>('all')
+  const [activeQueue, setActiveQueue] = useState<ActionQueue>('all')
   const [sortField, setSortField] = useState<string>('priority_score')
 
   const [searchText, setSearchText] = useState('')
@@ -237,8 +232,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     setSelectedLeadIds(new Set())
     setDrawerLeadId(null)
     setSearchText('')
-    setActiveTabId('review')
-    setActiveQueue('needs_verification')
+    setActiveTabId('all')
+    setActiveQueue('all')
     setContactReadinessFilter('')
     setEnrichmentStatusFilter('')
     setAudienceTierFilter('')
@@ -329,7 +324,7 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               <span className="review-context-job">{activeJob?.label || `탐색 #${activeJobId}`}</span>
               {quality && (
                 <span className="review-context-stats">
-                  전체 {quality.total_leads}건 · 검토 필요 {quality.needs_verification_leads + quality.needs_correction_leads}건 · 연락 가능 {quality.contactable_leads}건
+                  전체 {quality.total_leads}건 · 미검토 {quality.unreviewed_leads}건 · 보강 필요 {quality.needs_enrichment_leads}건 · 연락 가능 {quality.contactable_leads}건
                 </span>
               )}
               {hasSecondaryFilters && (
@@ -337,8 +332,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               )}
             </div>
 
-            {/* Quality Banner — only on review tab */}
-            {quality && activeTabId === 'review' && (
+            {/* Quality Banner — on review-related tabs when data quality is low */}
+            {quality && (activeTabId === 'all' || activeTabId === 'unreviewed' || activeTabId === 'needs_enrichment') && (
               <QualityBanner
                 quality={quality}
                 onSupplementarySearch={handleSupplementarySearch}
@@ -351,16 +346,16 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               />
             )}
 
-            {/* Inbox Tabs (3 + 1 archive) */}
+            {/* Inbox Tabs — mutually exclusive workflow states */}
             <div className="review-queue-tabs">
-              {INBOX_TABS.slice(0, 3).map(tab => (
+              {INBOX_TABS.slice(0, 5).map(tab => (
                 <button
                   key={tab.id}
                   className={`inbox-tab${activeTabId === tab.id ? ' active' : ''}`}
                   onClick={() => handleTabChange(tab.id)}
                 >
                   {tab.label}
-                  {quality && <span className="queue-tab-count">{tab.subQueues.reduce((s, sq) => s + getQueueCount(quality, sq.value), 0)}</span>}
+                  {quality && <span className="queue-tab-count">{getQueueCount(quality, tab.primaryQueue)}</span>}
                 </button>
               ))}
               <span className="queue-tab-divider" />
@@ -368,13 +363,13 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
                 className={`inbox-tab archive-tab${activeTabId === 'synced' ? ' active' : ''}`}
                 onClick={() => handleTabChange('synced')}
               >
-                {INBOX_TABS[3].label}
+                {INBOX_TABS[5].label}
                 {quality && <span className="queue-tab-count">{getQueueCount(quality, 'synced')}</span>}
               </button>
             </div>
 
             {/* Sub-queue filter */}
-            {activeInboxTab.subQueues.length > 1 && (
+            {activeInboxTab.subQueues && activeInboxTab.subQueues.length > 1 && (
               <div className="inbox-sub-filter">
                 {activeInboxTab.subQueues.map(sq => {
                   const count = quality ? getQueueCount(quality, sq.value) : 0
@@ -483,24 +478,38 @@ function InboxEmptyState({ tabId, queue, hasFilters, onClearFilters, onSwitchTab
       </div>
     )
   }
-  if (tabId === 'review') return (
+  if (tabId === 'all') return (
+    <div className="empty-state">
+      <span className="empty-state-icon">{'\u{1F4CB}'}</span>
+      <h3>수집된 리드가 없습니다</h3>
+      <p>새 탐색을 시작하여 리드를 수집하세요.</p>
+    </div>
+  )
+  if (tabId === 'unreviewed') return (
     <div className="empty-state">
       <span className="empty-state-icon">{'\u2705'}</span>
-      <h3>검토할 리드가 없습니다</h3>
-      <p>모든 리드가 분류되었거나, 새 탐색을 시작하여 리드를 수집하세요.</p>
+      <h3>미검토 리드가 없습니다</h3>
+      <p>모든 리드가 분류되었습니다.</p>
       <button className="empty-state-action-btn" onClick={() => onSwitchTab('contactable')}>연락 가능 확인</button>
+    </div>
+  )
+  if (tabId === 'needs_enrichment') return (
+    <div className="empty-state">
+      <span className="empty-state-icon">{'\u2705'}</span>
+      <h3>보강이 필요한 리드가 없습니다</h3>
+      <p>모든 데이터가 확보되었습니다.</p>
     </div>
   )
   if (tabId === 'contactable') return (
     <div className="empty-state">
       <span className="empty-state-icon">{'\u2709\uFE0F'}</span>
       <h3>연락 가능한 리드가 아직 없습니다</h3>
-      <p>검토 필요 탭에서 리드를 먼저 분류하세요.</p>
-      <button className="empty-state-action-btn" onClick={() => onSwitchTab('review')}>검토 필요 탭으로 이동</button>
+      <p>미검토 탭에서 리드를 먼저 분류하세요.</p>
+      <button className="empty-state-action-btn" onClick={() => onSwitchTab('unreviewed')}>미검토 탭으로 이동</button>
     </div>
   )
   if (tabId === 'excluded') {
-    const label = queue === 'held' ? '보류 중인' : '제외된'
+    const label = queue === 'on_hold' ? '보류 중인' : '제외된'
     return (
       <div className="empty-state">
         <span className="empty-state-icon">{'\uD83D\uDCCB'}</span>

@@ -8,6 +8,8 @@ defmodule LeadResearcher.Leads do
     Lead
     |> maybe_filter_job(params)
     |> maybe_filter_action_queue(params)
+    |> maybe_filter_subscriber_min(params)
+    |> maybe_filter_subscriber_max(params)
     |> maybe_filter_platform(params)
     |> maybe_filter_status(params)
     |> maybe_filter_min_confidence(params)
@@ -313,34 +315,41 @@ defmodule LeadResearcher.Leads do
 
   defp maybe_filter_has_email(query, _), do: query
 
-  # Action queue: compound filters for CRM work queues (Phase 6)
-  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_verification"}) do
-    where(query, [l], l.contact_readiness in ["platform_suspect", "needs_verification"])
+  # --- Subscriber count range filters ---
+  defp maybe_filter_subscriber_min(query, %{"subscriber_min" => min}) when min != "" and not is_nil(min) do
+    min_val = parse_int_val(min)
+    where(query, [l], coalesce(l.audience_size_override, l.subscriber_count) >= ^min_val)
   end
 
-  defp maybe_filter_action_queue(query, %{"action_queue" => "contactable"}) do
-    where(query, [l], l.contact_readiness == "contactable" and l.review_status not in ["rejected", "auto_rejected"])
+  defp maybe_filter_subscriber_min(query, _), do: query
+
+  defp maybe_filter_subscriber_max(query, %{"subscriber_max" => max}) when max != "" and not is_nil(max) do
+    max_val = parse_int_val(max)
+    where(query, [l], coalesce(l.audience_size_override, l.subscriber_count) <= ^max_val)
   end
 
-  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_correction"}) do
-    where(
-      query,
-      [l],
-      l.review_status not in ["rejected", "auto_rejected"] and
-        ((l.platform in ["youtube", "instagram"] and is_nil(l.subscriber_count) and is_nil(l.audience_size_override)) or
-           l.enrichment_status in ["not_started", "failed"])
-    )
+  defp maybe_filter_subscriber_max(query, _), do: query
+
+  # --- Action queue: mutually exclusive workflow state filters ---
+  # Priority (highest → lowest):
+  #   1. synced           → master_sync_status == "synced"
+  #   2. conflict_queue   → master_sync_status == "conflict_queue"
+  #   3. ready_to_sync    → master_sync_status == "ready_to_sync"
+  #   4. excluded         → review_status in ["rejected", "auto_rejected"]
+  #   5. on_hold          → review_status == "held"
+  #   6. needs_enrichment → NOT above AND (no_email OR missing_audience OR enrichment incomplete)
+  #   7. contactable      → NOT above AND contactable/user_confirmed
+  #   8. unreviewed       → everything else
+  #   9. all              → no filter
+
+  # "all" = no queue filter, shows everything
+  defp maybe_filter_action_queue(query, %{"action_queue" => "all"}), do: query
+
+  # Master pipeline states (highest priority — these override review-level states)
+  defp maybe_filter_action_queue(query, %{"action_queue" => "synced"}) do
+    where(query, [l], l.master_sync_status == "synced")
   end
 
-  defp maybe_filter_action_queue(query, %{"action_queue" => "held"}) do
-    where(query, [l], l.review_status == "held")
-  end
-
-  defp maybe_filter_action_queue(query, %{"action_queue" => "excluded"}) do
-    where(query, [l], l.review_status in ["auto_rejected", "rejected"])
-  end
-
-  # Master pipeline queues (B1+B2)
   defp maybe_filter_action_queue(query, %{"action_queue" => "conflict_queue"}) do
     where(query, [l], l.master_sync_status == "conflict_queue")
   end
@@ -349,8 +358,66 @@ defmodule LeadResearcher.Leads do
     where(query, [l], l.master_sync_status == "ready_to_sync")
   end
 
-  defp maybe_filter_action_queue(query, %{"action_queue" => "synced"}) do
-    where(query, [l], l.master_sync_status == "synced")
+  # Excluded: rejected/auto_rejected, NOT in master pipeline
+  defp maybe_filter_action_queue(query, %{"action_queue" => "excluded"}) do
+    where(query, [l],
+      l.master_sync_status == "not_synced" and
+      l.review_status in ["auto_rejected", "rejected"]
+    )
+  end
+
+  # On hold: held, NOT in master pipeline, NOT excluded
+  defp maybe_filter_action_queue(query, %{"action_queue" => "on_hold"}) do
+    where(query, [l],
+      l.master_sync_status == "not_synced" and
+      l.review_status == "held"
+    )
+  end
+
+  # Needs enrichment: missing email, missing audience, or enrichment incomplete
+  # Excludes: master pipeline, excluded, held
+  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_enrichment"}) do
+    where(query, [l],
+      l.master_sync_status == "not_synced" and
+      l.review_status not in ["rejected", "auto_rejected", "held"] and
+      (l.contact_readiness == "no_email" or
+       (is_nil(l.subscriber_count) and is_nil(l.audience_size_override)) or
+       l.enrichment_status in ["not_started", "failed"])
+    )
+  end
+
+  # Contactable: has contactable email, NOT needs_enrichment, NOT excluded/held/pipeline
+  defp maybe_filter_action_queue(query, %{"action_queue" => "contactable"}) do
+    where(query, [l],
+      l.master_sync_status == "not_synced" and
+      l.review_status not in ["rejected", "auto_rejected", "held"] and
+      l.contact_readiness in ["contactable", "user_confirmed"] and
+      not (l.contact_readiness == "no_email") and
+      not (is_nil(l.subscriber_count) and is_nil(l.audience_size_override) and l.enrichment_status in ["not_started", "failed"])
+    )
+  end
+
+  # Unreviewed: everything else (catch-all for not_synced, not excluded/held, not needs_enrichment, not contactable)
+  defp maybe_filter_action_queue(query, %{"action_queue" => "unreviewed"}) do
+    where(query, [l],
+      l.master_sync_status == "not_synced" and
+      l.review_status not in ["rejected", "auto_rejected", "held"] and
+      l.contact_readiness not in ["contactable", "user_confirmed", "no_email"] and
+      not (is_nil(l.subscriber_count) and is_nil(l.audience_size_override) and l.enrichment_status in ["not_started", "failed"])
+    )
+  end
+
+  # Backward compat: old queue names map to new ones
+  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_verification"}) do
+    maybe_filter_action_queue(query, %{"action_queue" => "unreviewed"})
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "needs_correction"}) do
+    maybe_filter_action_queue(query, %{"action_queue" => "needs_enrichment"})
+  end
+
+  defp maybe_filter_action_queue(query, %{"action_queue" => "held"}) do
+    maybe_filter_action_queue(query, %{"action_queue" => "on_hold"})
   end
 
   defp maybe_filter_action_queue(query, _), do: query
