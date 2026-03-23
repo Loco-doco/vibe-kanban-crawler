@@ -3,17 +3,14 @@ import {
   PLATFORM_LABELS,
   SUSPECT_REASON_LABELS,
   AUDIENCE_TIER_LABELS,
-  AUDIENCE_DISPLAY_STATUS_LABELS,
-  AUDIENCE_FAILURE_REASON_LABELS,
-  REVIEW_STATUS_LABELS,
 } from '../types'
 
 type ContactCategory = 'direct_contact' | 'shared_email' | 'platform_email' | 'needs_check'
 
 const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
-  direct_contact: '직접 연락 가능',
+  direct_contact: '연락 가능',
   shared_email: '공용 메일',
-  platform_email: '플랫폼 메일 의심',
+  platform_email: '플랫폼 의심',
   needs_check: '검증 필요',
 }
 
@@ -34,14 +31,6 @@ function deriveContactCategory(lead: Lead): ContactCategory {
   return 'needs_check'
 }
 
-interface Props {
-  leads: Lead[]
-  selectedIds: Set<number>
-  onToggleSelect: (id: number) => void
-  onToggleSelectAll: () => void
-  onViewDetail: (lead: Lead) => void
-}
-
 function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
   if (lead.contact_readiness === 'no_email')
     return { label: '이메일 확보 필요', priority: 'high' }
@@ -56,9 +45,12 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
   return { label: '검토 필요', priority: 'medium' }
 }
 
-function truncateEmail(email: string | null, max: number = 28): string {
-  if (!email) return '(없음)'
-  return email.length > max ? email.slice(0, max) + '...' : email
+interface Props {
+  leads: Lead[]
+  selectedIds: Set<number>
+  onToggleSelect: (id: number) => void
+  onToggleSelectAll: () => void
+  onViewDetail: (lead: Lead) => void
 }
 
 export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onViewDetail }: Props) {
@@ -70,18 +62,11 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
         <thead>
           <tr>
             <th className="col-check">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={onToggleSelectAll}
-              />
+              <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
             </th>
             <th>리드명</th>
-            <th>이메일</th>
             <th>이메일 상태</th>
-            <th>플랫폼 / 영향력</th>
-            <th>카테고리</th>
-            <th>리뷰</th>
+            <th>플랫폼 / 규모</th>
             <th>다음 단계</th>
             <th className="col-detail"></th>
           </tr>
@@ -89,8 +74,8 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
         <tbody>
           {leads.map(lead => {
             const action = getRecommendedAction(lead)
-            const email = lead.contact_email || lead.email
             const contactCat = deriveContactCategory(lead)
+            const email = lead.contact_email || lead.email
             return (
               <tr
                 key={lead.id}
@@ -120,15 +105,11 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                     >{'\u2197'}</a>
                   )}
                 </td>
-                <td className="col-email">
-                  <span className="email-text" title={email || undefined}>
-                    {truncateEmail(email)}
-                  </span>
-                </td>
                 <td className="col-contact-category">
                   <span className={`contact-category-badge ${CONTACT_CATEGORY_VARIANTS[contactCat]}`}>
                     {CONTACT_CATEGORY_LABELS[contactCat]}
                   </span>
+                  {email && <span className="email-hint" title={email}>{email.length > 20 ? email.slice(0, 20) + '...' : email}</span>}
                   {lead.suspect_reason && (
                     <span className="suspect-info-icon" title={SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}>
                       {'\u24D8'}
@@ -139,42 +120,11 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                   <span className={`platform-badge ${lead.platform}`}>
                     {PLATFORM_LABELS[lead.platform] || lead.platform}
                   </span>
-                  {' '}
-                  {lead.audience_display_status === 'collected' ? (
-                    <span className="audience-value-inline">
-                      {lead.effective_audience_label || lead.effective_audience_size}
-                    </span>
-                  ) : (
-                    <span
-                      className={`audience-status ${lead.audience_display_status}`}
-                      title={lead.audience_failure_reason ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason) : undefined}
-                    >
-                      {lead.audience_failure_reason
-                        ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason)
-                        : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
-                    </span>
-                  )}
                   {lead.effective_audience_tier && (
                     <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
                       {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
                     </span>
                   )}
-                </td>
-                <td className="col-tags">
-                  {lead.normalized_tags.length > 0 ? (
-                    <span className="tag-chips">
-                      {lead.normalized_tags.map(tag => (
-                        <span key={tag} className="tag-chip">{tag}</span>
-                      ))}
-                    </span>
-                  ) : lead.discovery_keyword ? (
-                    <span className="text-muted">{lead.discovery_keyword}</span>
-                  ) : '-'}
-                </td>
-                <td>
-                  <span className={`review-badge ${lead.review_status}`}>
-                    {REVIEW_STATUS_LABELS[lead.review_status]}
-                  </span>
                 </td>
                 <td>
                   <span className={`action-label ${action.priority}`} title={action.label}>
