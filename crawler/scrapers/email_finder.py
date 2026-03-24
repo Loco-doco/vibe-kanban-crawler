@@ -108,27 +108,45 @@ class EmailFinder:
                     "source_url": ctx["about_url"],
                 }
 
-        # Strategy 2: Parse ytInitialData for channel description (most reliable)
+        # Strategy 2: Parse ytInitialData for channel description + business email
         found_from_description = False
         match = re.search(
             r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL
         )
         if match:
+            data_str = match.group(1)
             try:
-                data = json.loads(match.group(1))
+                data = json.loads(data_str)
 
-                # Extract channel description from metadata
+                # 2a: channelMetadataRenderer.description (classic)
                 description = (
                     data
                     .get("metadata", {})
                     .get("channelMetadataRenderer", {})
                     .get("description", "")
                 )
-                if description:
+
+                # 2b: Also try aboutChannelViewModel (newer YouTube structure)
+                # and signInForBusinessEmail / businessEmailLabel
+                about_texts = [description] if description else []
+
+                # Deep scan for any "description" or "aboutChannelViewModel" text
+                about_match = re.search(r'"aboutChannelViewModel"\s*:\s*\{(.*?)\}', data_str, re.DOTALL)
+                if about_match:
+                    about_texts.append(about_match.group(1))
+
+                # businessEmailRevealRenderer has email behind a click, but
+                # the email is sometimes in signInForBusinessEmail text
+                biz_match = re.search(r'"businessEmail(?:Label|Reveal).*?"text"\s*:\s*"([^"]+)"', data_str)
+                if biz_match:
+                    about_texts.append(biz_match.group(1))
+
+                all_text = " ".join(about_texts)
+                if all_text:
                     for email in set(
                         re.findall(
                             r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-                            description,
+                            all_text,
                         )
                     ):
                         if is_valid_email(email):
@@ -149,9 +167,7 @@ class EmailFinder:
                 pass
 
             # Strategy 3: Broad email scan across ytInitialData (fallback only)
-            # Only if structured description parsing found nothing
             if not found_from_description:
-                data_str = match.group(1)
                 for email in set(
                     re.findall(
                         r"(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
@@ -201,13 +217,7 @@ class EmailFinder:
 
     # ── Strategy: Web Search ──
 
-    # Track persistent DDG failures to avoid wasting time on subsequent channels
-    _ddg_blocked = False
-
     def _search_web_search(self, channel_name, channel_url, ctx):
-        if self._ddg_blocked:
-            return
-
         _log(f"[web_search] Searching web for: {channel_name}")
 
         queries = [
@@ -216,12 +226,9 @@ class EmailFinder:
         ]
 
         for query in queries:
-            result_urls = self._duckduckgo_search(query)
-            if result_urls is None:
-                # DDG is blocked, skip all remaining web searches
-                EmailFinder._ddg_blocked = True
-                _log("[web_search] DuckDuckGo appears blocked, skipping web search for remaining channels")
-                return
+            result_urls = self._multi_engine_search(query)
+            if not result_urls:
+                continue
 
             for result_url in result_urls[:3]:
                 # Skip YouTube itself (already searched)
@@ -360,6 +367,61 @@ class EmailFinder:
                         }
 
     # ── Helpers ──
+
+    # Track which search engines are blocked to avoid repeated timeouts
+    _blocked_engines = set()
+
+    def _multi_engine_search(self, query):
+        """Try multiple search engines in order. Returns list of URLs or []."""
+        engines = [
+            ("google", self._google_search),
+            ("duckduckgo", self._duckduckgo_search),
+        ]
+        for name, search_fn in engines:
+            if name in EmailFinder._blocked_engines:
+                continue
+            result = search_fn(query)
+            if result is None:
+                # Engine is blocked
+                EmailFinder._blocked_engines.add(name)
+                _log(f"[web_search] {name} appears blocked, trying next engine")
+                continue
+            if result:
+                return result
+        return []
+
+    def _google_search(self, query):
+        """Search Google and return result URLs.
+        Returns None if blocked, [] if no results."""
+        import requests as _requests
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        }
+
+        try:
+            resp = _requests.get(
+                f"https://www.google.com/search?q={quote_plus(query)}&num=5&hl=ko",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 429 or resp.status_code == 403:
+                return None
+            if resp.status_code == 200 and resp.text:
+                import re as _re
+                urls = []
+                # Extract URLs from Google search results
+                for match in _re.finditer(r'href="(https?://(?!www\.google|google\.com|accounts\.google)[^"&]+)"', resp.text):
+                    url = match.group(1)
+                    if not any(d in url for d in ['google.com', 'googleapis.com', 'gstatic.com', 'youtube.com']):
+                        urls.append(url)
+                return urls[:5] if urls else []
+        except _requests.Timeout:
+            return None
+        except Exception:
+            pass
+        return []
 
     def _duckduckgo_search(self, query):
         """Search DuckDuckGo and return result URLs.
