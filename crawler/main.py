@@ -215,8 +215,8 @@ def run_discovery_mode(config, crawler_config):
 
     # ── Phase 2: If target not reached, try keyword variations ──
     # Pre-build variation keywords so we know total count
-    variation_prefixes = ["인기", "추천", "best", "top", "유명"]
-    variation_suffixes = ["유튜버", "크리에이터", "채널"]
+    variation_prefixes = ["인기", "추천", "best", "top", "유명", "독학"]
+    variation_suffixes = ["유튜버", "크리에이터", "채널", "강의", "강사", "선생님"]
     variation_keywords = []
 
     for prefix in variation_prefixes:
