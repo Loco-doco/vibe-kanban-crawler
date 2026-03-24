@@ -1,9 +1,5 @@
 import type { Lead } from '../types'
-import {
-  PLATFORM_LABELS,
-  SUSPECT_REASON_LABELS,
-  AUDIENCE_TIER_LABELS,
-} from '../types'
+import { PLATFORM_LABELS, SUSPECT_REASON_LABELS } from '../types'
 
 type ContactCategory = 'direct_contact' | 'shared_email' | 'platform_email' | 'needs_check'
 
@@ -36,7 +32,7 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
     return { label: '이메일 확보 필요', priority: 'high' }
   if (lead.contact_readiness === 'platform_suspect')
     return { label: '이메일 검증 필요', priority: 'high' }
-  if (lead.audience_display_status === 'not_collected')
+  if (!lead.subscriber_count && !lead.audience_size_override)
     return { label: '영향력 보정 필요', priority: 'medium' }
   if (lead.enrichment_status === 'not_started')
     return { label: '프로필 보강 필요', priority: 'medium' }
@@ -45,28 +41,10 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
   return { label: '검토 필요', priority: 'medium' }
 }
 
-interface QualityFlag {
-  key: string
-  label: string
-  severity: 'error' | 'warning' | 'info'
+function formatSubscriberCount(count: number | null | undefined): string {
+  if (count === null || count === undefined) return '-'
+  return count.toLocaleString('ko-KR')
 }
-
-function getQualityFlags(lead: Lead): QualityFlag[] {
-  const flags: QualityFlag[] = []
-  if (lead.contact_readiness === 'no_email')
-    flags.push({ key: 'no_email', label: '이메일 없음', severity: 'error' })
-  if (lead.contact_readiness === 'platform_suspect')
-    flags.push({ key: 'platform_suspect', label: '플랫폼 메일 의심', severity: 'warning' })
-  if (is_nil(lead.subscriber_count) && is_nil(lead.audience_size_override))
-    flags.push({ key: 'no_audience', label: '영향력 미수집', severity: 'warning' })
-  if (lead.enrichment_status === 'not_started')
-    flags.push({ key: 'no_enrichment', label: '보강 미시작', severity: 'info' })
-  if (lead.enrichment_status === 'failed')
-    flags.push({ key: 'enrich_fail', label: '보강 실패', severity: 'warning' })
-  return flags
-}
-
-function is_nil(v: unknown): boolean { return v === null || v === undefined }
 
 interface Props {
   leads: Lead[]
@@ -89,7 +67,8 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
             </th>
             <th>리드명</th>
             <th>이메일 상태</th>
-            <th>플랫폼 / 규모</th>
+            <th>플랫폼</th>
+            <th>구독자</th>
             <th>다음 단계</th>
             <th className="col-detail"></th>
           </tr>
@@ -99,6 +78,7 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
             const action = getRecommendedAction(lead)
             const contactCat = deriveContactCategory(lead)
             const email = lead.contact_email || lead.email
+            const effectiveAudience = lead.audience_size_override || lead.subscriber_count
             return (
               <tr
                 key={lead.id}
@@ -139,20 +119,16 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                     </span>
                   )}
                 </td>
-                <td className="col-platform-audience">
+                <td>
                   <span className={`platform-badge ${lead.platform}`}>
                     {PLATFORM_LABELS[lead.platform] || lead.platform}
                   </span>
-                  {lead.effective_audience_tier && (
-                    <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
-                      {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
-                    </span>
-                  )}
-                  {getQualityFlags(lead).map(flag => (
-                    <span key={flag.key} className={`quality-flag ${flag.severity}`} title={flag.label}>
-                      {flag.severity === 'error' ? '\u26A0' : '\u25CB'}
-                    </span>
-                  ))}
+                </td>
+                <td className="col-subscriber-count">
+                  {effectiveAudience
+                    ? <span className="subscriber-number">{formatSubscriberCount(effectiveAudience)}</span>
+                    : <span className="text-muted">-</span>
+                  }
                 </td>
                 <td>
                   <span className={`action-label ${action.priority}`} title={action.label}>

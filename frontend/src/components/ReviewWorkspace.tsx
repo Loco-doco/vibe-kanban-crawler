@@ -8,7 +8,6 @@ import ReviewTable from './ReviewTable'
 import BulkActions from './BulkActions'
 import type { BulkResult } from './BulkActions'
 import LeadDetailDrawer from './LeadDetailDrawer'
-import LeadFullDetail from './LeadFullDetail'
 import SupplementarySearchModal from './SupplementarySearchModal'
 import type { Job, Lead, ReviewStatus, SupplementaryType } from '../types'
 
@@ -79,7 +78,6 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(initialJobId ?? null)
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<number>>(new Set())
   const [drawerLeadId, setDrawerLeadId] = useState<number | null>(null)
-  const [fullDetailLeadId, setFullDetailLeadId] = useState<number | null>(null)
 
   const [activeTabId, setActiveTabId] = useState<InboxTabId>('all')
   const [activeQueue, setActiveQueue] = useState<ActionQueue>('all')
@@ -332,8 +330,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               )}
             </div>
 
-            {/* Quality Banner — on review-related tabs when data quality is low */}
-            {quality && (activeTabId === 'all' || activeTabId === 'unreviewed' || activeTabId === 'needs_enrichment') && (
+            {/* Quality Banner — shows enrichment CTAs when data quality is low */}
+            {quality && activeTabId !== 'synced' && (
               <QualityBanner
                 quality={quality}
                 onSupplementarySearch={handleSupplementarySearch}
@@ -449,13 +447,8 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
       </div>
 
       {drawerLead && (
-        <LeadDetailDrawer lead={drawerLead} activeQueue={activeQueue} onClose={handleCloseDrawer} onUpdated={handleLeadUpdated} onOpenFullDetail={() => { setFullDetailLeadId(drawerLead.id); setDrawerLeadId(null) }} />
+        <LeadDetailDrawer lead={drawerLead} activeQueue={activeQueue} onClose={handleCloseDrawer} onUpdated={handleLeadUpdated} />
       )}
-
-      {fullDetailLeadId && leads && (() => {
-        const fl = leads.find(l => l.id === fullDetailLeadId)
-        return fl ? <LeadFullDetail lead={fl} onClose={() => setFullDetailLeadId(null)} onUpdated={handleLeadUpdated} /> : null
-      })()}
 
       {supplementModalType && activeJobId && (
         <SupplementarySearchModal jobId={activeJobId} suggestedType={supplementModalType} onClose={() => setSupplementModalType(null)} />
