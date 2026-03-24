@@ -294,12 +294,18 @@ class YouTubeDiscoveryScraper(BaseScraper):
         if not title:
             return None
 
+        sub_count = parse_subscriber_text(sub_text)
+        if sub_text and sub_count is None:
+            _log(f"[audience] Failed to parse subscriber text for {title}: '{sub_text}'")
+        elif not sub_text:
+            _log(f"[audience] No subscriber text found for {title}")
+
         return {
             "title": title,
             "channel_id": channel_id,
             "url": url,
             "subscriber_text": sub_text,
-            "subscriber_count": parse_subscriber_text(sub_text),
+            "subscriber_count": sub_count,
             "description": desc,
         }
 
