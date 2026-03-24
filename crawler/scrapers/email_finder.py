@@ -201,7 +201,13 @@ class EmailFinder:
 
     # ── Strategy: Web Search ──
 
+    # Track persistent DDG failures to avoid wasting time on subsequent channels
+    _ddg_blocked = False
+
     def _search_web_search(self, channel_name, channel_url, ctx):
+        if self._ddg_blocked:
+            return
+
         _log(f"[web_search] Searching web for: {channel_name}")
 
         queries = [
@@ -211,6 +217,11 @@ class EmailFinder:
 
         for query in queries:
             result_urls = self._duckduckgo_search(query)
+            if result_urls is None:
+                # DDG is blocked, skip all remaining web searches
+                EmailFinder._ddg_blocked = True
+                _log("[web_search] DuckDuckGo appears blocked, skipping web search for remaining channels")
+                return
 
             for result_url in result_urls[:3]:
                 # Skip YouTube itself (already searched)
@@ -352,61 +363,69 @@ class EmailFinder:
 
     def _duckduckgo_search(self, query):
         """Search DuckDuckGo and return result URLs.
-        Tries DuckDuckGo Lite first (less aggressive blocking), then HTML version."""
+        Returns None if DDG appears blocked (403), [] if no results, or list of URLs.
+        Uses short timeout to avoid blocking the pipeline."""
         import requests as _requests
 
-        urls = []
-
-        # Strategy 1: DuckDuckGo Lite (lighter, less likely to be blocked)
-        lite_url = f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml",
             "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
         }
 
+        # Strategy 1: DuckDuckGo Lite (less aggressive blocking)
         try:
-            resp = _requests.get(lite_url, headers=headers, timeout=15)
+            resp = _requests.get(
+                f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 403:
+                return None  # signal: DDG is blocking us
+
             if resp.status_code == 200 and resp.text:
-                # Extract URLs from lite results
                 import re as _re
-                for match in _re.finditer(r'<a[^>]+href="(https?://[^"]+)"[^>]*class="result-link"', resp.text):
-                    urls.append(match.group(1))
-                # Fallback: extract any external URLs from lite page
-                if not urls:
-                    from urllib.parse import parse_qs, urlparse as _urlparse
-                    for match in _re.finditer(r'href="(https?://(?!lite\.duckduckgo|duckduckgo)[^"]+)"', resp.text):
-                        url = match.group(1)
-                        # Skip DDG internal links
-                        parsed = _urlparse(url)
-                        if 'duckduckgo' not in parsed.netloc:
-                            urls.append(url)
+                from urllib.parse import urlparse as _urlparse
+                urls = []
+                for match in _re.finditer(r'href="(https?://(?!lite\.duckduckgo|duckduckgo)[^"]+)"', resp.text):
+                    parsed = _urlparse(match.group(1))
+                    if 'duckduckgo' not in parsed.netloc:
+                        urls.append(match.group(1))
                 if urls:
                     return urls[:5]
+        except _requests.Timeout:
+            return None  # treat timeout as blocked
         except Exception:
             pass
 
-        # Strategy 2: DuckDuckGo HTML (original, may be blocked)
-        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-        html = fetch_with_retry(search_url, self.max_retries, self.delay_ms)
-        if not html:
-            return []
+        # Strategy 2: DuckDuckGo HTML (fallback)
+        try:
+            resp = _requests.get(
+                f"https://html.duckduckgo.com/html/?q={quote_plus(query)}",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 403:
+                return None
 
-        from bs4 import BeautifulSoup
-        from urllib.parse import parse_qs, urlparse as _urlparse
+            if resp.status_code == 200 and resp.text:
+                from bs4 import BeautifulSoup
+                from urllib.parse import parse_qs, urlparse as _urlparse
+                soup = BeautifulSoup(resp.text, "lxml")
+                urls = []
+                for link in soup.select("a.result__a"):
+                    href = link.get("href", "")
+                    if "duckduckgo.com/l/" in href:
+                        params = parse_qs(_urlparse(href).query)
+                        if "uddg" in params:
+                            urls.append(params["uddg"][0])
+                    elif href.startswith("http"):
+                        urls.append(href)
+                return urls[:5]
+        except _requests.Timeout:
+            return None
+        except Exception:
+            pass
 
-        soup = BeautifulSoup(html, "lxml")
-
-        for link in soup.select("a.result__a"):
-            href = link.get("href", "")
-            if "duckduckgo.com/l/" in href:
-                params = parse_qs(_urlparse(href).query)
-                if "uddg" in params:
-                    urls.append(params["uddg"][0])
-            elif href.startswith("http"):
-                urls.append(href)
-
-        return urls[:5]
+        return []
 
     # Domains that are YouTube/Google internal — not creator-owned
     _INTERNAL_DOMAINS = {
