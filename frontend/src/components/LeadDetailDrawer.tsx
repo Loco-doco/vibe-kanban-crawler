@@ -6,8 +6,6 @@ import {
   PLATFORM_LABELS,
   CONTACT_READINESS_LABELS,
   SUSPECT_REASON_LABELS,
-  AUDIENCE_TIER_LABELS,
-  AUDIENCE_DISPLAY_STATUS_LABELS,
   AUDIENCE_FAILURE_REASON_LABELS,
   REVIEW_STATUS_LABELS,
   MASTER_SYNC_LABELS,
@@ -18,7 +16,6 @@ interface Props {
   activeQueue: string
   onClose: () => void
   onUpdated: () => void
-  onOpenFullDetail: () => void
 }
 
 function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
@@ -35,7 +32,7 @@ function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | '
   return { label: '검토 필요', priority: 'medium' }
 }
 
-export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated, onOpenFullDetail }: Props) {
+export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated }: Props) {
   const queryClient = useQueryClient()
 
   const invalidateAll = () => {
@@ -289,18 +286,11 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
               </div>
             )}
             <div className="quick-detail-field">
-              <span className="quick-detail-label">영향력</span>
+              <span className="quick-detail-label">구독자</span>
               <span className="quick-detail-value">
-                {lead.audience_display_status === 'collected' ? (
-                  <>
-                    {lead.effective_audience_label || `${lead.effective_audience_size}`}
-                    {lead.effective_audience_tier && (
-                      <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
-                        {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
-                      </span>
-                    )}
-                  </>
-                ) : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                {lead.effective_audience_size
+                  ? lead.effective_audience_size.toLocaleString('ko-KR')
+                  : '미수집'}
               </span>
             </div>
           </div>
@@ -308,10 +298,18 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
           {/* Tier 4: Actions (context-dependent) */}
           {renderActions()}
 
-          {/* Full Detail CTA */}
-          <button className="full-detail-cta" onClick={onOpenFullDetail}>
-            상세 보기 &rarr;
-          </button>
+          {/* Channel link as detail CTA instead of modal */}
+          {lead.channel_url && (
+            <a
+              href={lead.channel_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="full-detail-cta"
+              style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}
+            >
+              채널 페이지 열기 &rarr;
+            </a>
+          )}
         </div>
       </div>
     </div>
