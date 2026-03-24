@@ -117,6 +117,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
             # Then use EmailFinder for deeper search
             # EmailFinder visits the actual channel page and may extract subscriber_count
             # even when the search result didn't have it (YouTube now returns handles instead)
+            pending_leads = []
             for lead in email_finder.find_emails(channel_title, channel_url, channel_id):
                 lead["channel_name"] = lead.get("channel_name") or channel_title
                 lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
@@ -130,13 +131,26 @@ class YouTubeDiscoveryScraper(BaseScraper):
                 # Skip if we already found this email from description
                 if lead.get("email") and lead["email"].lower() in found_emails:
                     continue
-                found_any = True
-                yield lead
+                pending_leads.append(lead)
 
             # Always pick up subscriber_count from EmailFinder's channel page visit
-            # This works even when EmailFinder yields zero leads (no email found)
             if sub_count is None and email_finder.last_subscriber_count:
                 sub_count = email_finder.last_subscriber_count
+
+            # Post-filter: now that we have actual subscriber_count, apply range filter
+            if sub_count is not None:
+                if subscriber_min and sub_count < subscriber_min:
+                    _log(f"Skipping {channel_title}: {sub_count} < min {subscriber_min}")
+                    continue
+                if subscriber_max and sub_count > subscriber_max:
+                    _log(f"Skipping {channel_title}: {sub_count} > max {subscriber_max}")
+                    continue
+
+            # Update subscriber_count on all pending leads and emit
+            for lead in pending_leads:
+                lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
+                found_any = True
+                yield lead
 
             # Even if no email found, yield channel info for manual review
             if not found_any:
