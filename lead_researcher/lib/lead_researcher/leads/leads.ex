@@ -148,6 +148,9 @@ defmodule LeadResearcher.Leads do
     lead = Repo.get!(Lead, lead_id)
     tier = Lead.compute_audience_tier(subscriber_count)
 
+    require Logger
+    Logger.info("[backfill] Lead ##{lead_id}: subscriber_count=#{inspect(subscriber_count)}, tier=#{inspect(tier)}")
+
     case lead
          |> Lead.changeset(%{
            subscriber_count: subscriber_count,
@@ -159,11 +162,15 @@ defmodule LeadResearcher.Leads do
         {:ok, updated}
 
       error ->
+        Logger.error("[backfill] Lead ##{lead_id}: update failed: #{inspect(error)}")
         error
     end
   end
 
   def set_audience_failure_reason(lead_id, reason) do
+    require Logger
+    Logger.info("[backfill] Lead ##{lead_id}: audience failure reason=#{inspect(reason)}")
+
     lead = Repo.get!(Lead, lead_id)
 
     lead

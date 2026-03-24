@@ -318,6 +318,9 @@ defmodule LeadResearcher.Crawler.Runner do
       suspect_reason: suspect_reason
     }
 
+    # Audience extraction trace
+    Logger.info("[runner] Lead #{lead_data["channel_name"] || email}: subscriber_count=#{inspect(sub_count)}, tier=#{inspect(attrs[:audience_tier])}, platform=#{platform}")
+
     # Auto-classify review status
     attrs = Map.put(attrs, :review_status, AutoReviewer.classify(attrs))
 
