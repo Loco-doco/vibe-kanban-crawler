@@ -8,12 +8,12 @@ Shared subscriber_count extraction logic used by:
 """
 import re
 import json
-import sys
 
 
 def _trace(message):
-    """Debug log to stderr for audience extraction tracing."""
-    print(f"[audience_trace] {message}", file=sys.stderr, flush=True)
+    """Audience extraction trace — outputs as JSONL log message on stdout.
+    Bridge.ex parses these as 'log' type and routes to Elixir Logger."""
+    print(json.dumps({"type": "log", "message": f"[audience] {message}"}), flush=True)
 
 
 def parse_subscriber_text(text):

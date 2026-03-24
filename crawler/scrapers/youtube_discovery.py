@@ -115,9 +115,14 @@ class YouTubeDiscoveryScraper(BaseScraper):
                         }
 
             # Then use EmailFinder for deeper search
+            # EmailFinder visits the actual channel page and may extract subscriber_count
+            # even when the search result didn't have it (YouTube now returns handles instead)
             for lead in email_finder.find_emails(channel_title, channel_url, channel_id):
                 lead["channel_name"] = lead.get("channel_name") or channel_title
                 lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
+                # Pick up subscriber_count from channel page if search result didn't have it
+                if sub_count is None and lead.get("subscriber_count"):
+                    sub_count = lead["subscriber_count"]
                 # Ensure source metadata defaults
                 lead.setdefault("source_platform", "youtube")
                 lead.setdefault("source_type", "profile_page")
@@ -129,6 +134,7 @@ class YouTubeDiscoveryScraper(BaseScraper):
                 yield lead
 
             # Even if no email found, yield channel info for manual review
+            # sub_count may have been updated by EmailFinder's channel page visit
             if not found_any:
                 yield {
                     "email": None,
@@ -296,7 +302,11 @@ class YouTubeDiscoveryScraper(BaseScraper):
 
         sub_count = parse_subscriber_text(sub_text)
         if sub_text and sub_count is None:
-            _log(f"[audience] Failed to parse subscriber text for {title}: '{sub_text}'")
+            # YouTube now sometimes returns the channel handle (e.g. @username) instead of subscriber count
+            if sub_text.startswith("@"):
+                _log(f"[audience] Got handle instead of subscriber count for {title}: '{sub_text}'")
+            else:
+                _log(f"[audience] Failed to parse subscriber text for {title}: '{sub_text}'")
         elif not sub_text:
             _log(f"[audience] No subscriber text found for {title}")
 
