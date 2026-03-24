@@ -2610,7 +2610,7 @@ body {
 .drawer-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0;
+  padding: 16px 20px;
 }
 
 /* Drawer Sections */
@@ -3881,4 +3881,15 @@ body {
 
 .quality-flag.info {
   color: var(--gray-400, #9ca3af);
+}
+
+.col-subscriber-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.subscriber-number {
+  font-size: 0.85rem;
+  color: var(--gray-700, #374151);
+  font-weight: 500;
 }
