@@ -133,8 +133,12 @@ class YouTubeDiscoveryScraper(BaseScraper):
                 found_any = True
                 yield lead
 
+            # Always pick up subscriber_count from EmailFinder's channel page visit
+            # This works even when EmailFinder yields zero leads (no email found)
+            if sub_count is None and email_finder.last_subscriber_count:
+                sub_count = email_finder.last_subscriber_count
+
             # Even if no email found, yield channel info for manual review
-            # sub_count may have been updated by EmailFinder's channel page visit
             if not found_any:
                 yield {
                     "email": None,

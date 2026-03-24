@@ -38,11 +38,14 @@ class EmailFinder:
         self.max_retries = config.get("max_retries", 3)
         self.delay_ms = config.get("delay_ms", 2000)
         self.effort = min(max(config.get("max_depth", 2), 1), 3)
+        # Set by find_emails — caller can read after iteration to get channel page subscriber count
+        self.last_subscriber_count = None
 
     def find_emails(self, channel_name, channel_url, channel_id=None):
         """
         Generator yielding email lead dicts from multiple sources.
         Deduplicates across sources automatically.
+        After iteration, self.last_subscriber_count contains the channel page's subscriber count.
         """
         strategies = self.EFFORT_STRATEGIES.get(self.effort, self.EFFORT_STRATEGIES[2])
         seen_emails = set()
@@ -53,6 +56,7 @@ class EmailFinder:
 
         # Extract subscriber_count from channel page HTML
         channel_subscriber_count = extract_subscriber_count(channel_html) if channel_html else None
+        self.last_subscriber_count = channel_subscriber_count
 
         ctx = {
             "about_html": channel_html,
@@ -347,13 +351,47 @@ class EmailFinder:
     # ── Helpers ──
 
     def _duckduckgo_search(self, query):
-        """Search DuckDuckGo HTML and return result URLs."""
+        """Search DuckDuckGo and return result URLs.
+        Tries DuckDuckGo Lite first (less aggressive blocking), then HTML version."""
+        import requests as _requests
+
+        urls = []
+
+        # Strategy 1: DuckDuckGo Lite (lighter, less likely to be blocked)
+        lite_url = f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        }
+
+        try:
+            resp = _requests.get(lite_url, headers=headers, timeout=15)
+            if resp.status_code == 200 and resp.text:
+                # Extract URLs from lite results
+                import re as _re
+                for match in _re.finditer(r'<a[^>]+href="(https?://[^"]+)"[^>]*class="result-link"', resp.text):
+                    urls.append(match.group(1))
+                # Fallback: extract any external URLs from lite page
+                if not urls:
+                    from urllib.parse import parse_qs, urlparse as _urlparse
+                    for match in _re.finditer(r'href="(https?://(?!lite\.duckduckgo|duckduckgo)[^"]+)"', resp.text):
+                        url = match.group(1)
+                        # Skip DDG internal links
+                        parsed = _urlparse(url)
+                        if 'duckduckgo' not in parsed.netloc:
+                            urls.append(url)
+                if urls:
+                    return urls[:5]
+        except Exception:
+            pass
+
+        # Strategy 2: DuckDuckGo HTML (original, may be blocked)
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
         html = fetch_with_retry(search_url, self.max_retries, self.delay_ms)
         if not html:
             return []
 
-        urls = []
         from bs4 import BeautifulSoup
         from urllib.parse import parse_qs, urlparse as _urlparse
 
@@ -362,7 +400,6 @@ class EmailFinder:
         for link in soup.select("a.result__a"):
             href = link.get("href", "")
             if "duckduckgo.com/l/" in href:
-                # Extract actual URL from redirect
                 params = parse_qs(_urlparse(href).query)
                 if "uddg" in params:
                     urls.append(params["uddg"][0])
