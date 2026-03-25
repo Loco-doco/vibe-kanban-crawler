@@ -3893,3 +3893,26 @@ body {
   color: var(--gray-700, #374151);
   font-weight: 500;
 }
+
+.subscriber-missing {
+  font-size: 0.75rem;
+  color: var(--amber-500, #f59e0b);
+  cursor: help;
+}
+
+.search-form-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 12px;
+  color: var(--gray-400, #9ca3af);
+  font-size: 0.8rem;
+}
+
+.search-form-divider::before,
+.search-form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--gray-200, #e5e7eb);
+}
