@@ -30,8 +30,8 @@ class EmailFinder:
 
     EFFORT_STRATEGIES = {
         1: ["youtube_about"],
-        2: ["youtube_about", "youtube_links", "web_search"],
-        3: ["youtube_about", "youtube_links", "web_search", "aggregators", "website_deep"],
+        2: ["youtube_about", "youtube_links", "social_profiles", "web_search"],
+        3: ["youtube_about", "youtube_links", "social_profiles", "web_search", "aggregators", "website_deep"],
     }
 
     def __init__(self, config):
@@ -214,6 +214,201 @@ class EmailFinder:
                         "source_type": "external_site",
                         "source_url": link,
                     }
+
+    # ── Strategy: Social Profile Scanning ──
+
+    # Social platforms where creators often put contact emails
+    _SOCIAL_EXTRACTORS = {
+        "instagram.com": "_extract_email_from_instagram",
+        "blog.naver.com": "_extract_email_from_naver_blog",
+        "naver.me": "_extract_email_from_naver_blog",
+        "x.com": "_extract_email_from_twitter",
+        "twitter.com": "_extract_email_from_twitter",
+        "linktr.ee": "_extract_email_from_linktree",
+        "lit.link": "_extract_email_from_linktree",
+        "lnk.to": "_extract_email_from_linktree",
+    }
+
+    def _search_social_profiles(self, channel_name, channel_url, ctx):
+        """Visit social profile links from YouTube channel and extract emails."""
+        html = ctx["about_html"]
+        if not html:
+            return
+
+        external_links = self._extract_youtube_external_links(html)
+        if not external_links:
+            return
+
+        visited = 0
+        for link in external_links:
+            if visited >= 3:  # Limit to 3 social profiles
+                break
+
+            domain = urlparse(link).netloc.lower()
+
+            # Check if this is a known social platform
+            extractor_name = None
+            for social_domain, method_name in self._SOCIAL_EXTRACTORS.items():
+                if social_domain in domain:
+                    extractor_name = method_name
+                    break
+
+            if not extractor_name:
+                # Also try generic extraction for unknown social/link pages
+                if any(d in domain for d in ['blog', 'notion.', 'carrd.co', 'bio.link', 'beacons.ai']):
+                    extractor_name = "_extract_email_generic"
+
+            if not extractor_name:
+                continue
+
+            visited += 1
+            _log(f"[social] Scanning {domain} for: {channel_name}")
+
+            extractor = getattr(self, extractor_name, self._extract_email_generic)
+            try:
+                for lead in extractor(link, channel_name, channel_url):
+                    yield lead
+            except Exception as e:
+                _log(f"[social] Error scanning {link}: {e}")
+
+            time.sleep(self.delay_ms / 1000 * 0.3)
+
+    def _extract_email_from_instagram(self, url, channel_name, channel_url):
+        """Extract email from Instagram profile page."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        # Instagram embeds profile data in shared_data or meta tags
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.7,
+                    "source": "instagram_profile",
+                    "source_platform": "instagram",
+                    "source_type": "profile_page",
+                    "source_url": url,
+                }
+
+    def _extract_email_from_naver_blog(self, url, channel_name, channel_url):
+        """Extract email from Naver blog profile/about page."""
+        # Naver blog profile URL patterns
+        profile_urls = [url]
+
+        # If it's a blog URL, also try the profile page
+        match = re.search(r'blog\.naver\.com/([^/?#]+)', url)
+        if match:
+            blog_id = match.group(1)
+            profile_urls.append(f"https://blog.naver.com/prologue/PrologueList.naver?blogId={blog_id}")
+
+        for page_url in profile_urls:
+            html = fetch_with_retry(page_url, 1, self.delay_ms)
+            if not html:
+                continue
+
+            emails = set(re.findall(
+                r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+                html,
+            ))
+            for email in emails:
+                if is_valid_email(email):
+                    yield {
+                        "email": email,
+                        "channel_name": channel_name,
+                        "channel_url": channel_url,
+                        "evidence_link": page_url,
+                        "confidence_score": 0.7,
+                        "source": "naver_blog",
+                        "source_platform": "naver",
+                        "source_type": "profile_page",
+                        "source_url": page_url,
+                    }
+
+    def _extract_email_from_twitter(self, url, channel_name, channel_url):
+        """Extract email from Twitter/X profile — limited since most is JS-rendered."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        # Twitter bio is sometimes in meta tags
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.6,
+                    "source": "twitter_profile",
+                    "source_platform": "twitter",
+                    "source_type": "profile_page",
+                    "source_url": url,
+                }
+
+    def _extract_email_from_linktree(self, url, channel_name, channel_url):
+        """Extract email from Linktree, lit.link, and similar bio link pages."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        # Also check for mailto: links
+        emails |= set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html))
+
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.75,
+                    "source": "linktree",
+                    "source_platform": "website",
+                    "source_type": "bio_link",
+                    "source_url": url,
+                }
+
+    def _extract_email_generic(self, url, channel_name, channel_url):
+        """Generic email extraction from any external page."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        emails |= set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html))
+
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.65,
+                    "source": "social_link",
+                    "source_platform": "website",
+                    "source_type": "external_site",
+                    "source_url": url,
+                }
 
     # ── Strategy: Web Search ──
 
