@@ -79,7 +79,7 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
   if (lead.contact_readiness === 'platform_suspect')
     issues.push(`이메일: 플랫폼 메일 의심${lead.suspect_reason ? ` (${SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason})` : ''}`)
   if (lead.contact_readiness === 'no_email')
-    issues.push('이메일: 없음 — 수집 필요')
+    issues.push('이메일: 없음 — 채널 페이지, 소셜 링크에서 이메일을 찾지 못했습니다. 프로필 보강을 실행하세요.')
   if (lead.contact_readiness === 'needs_verification')
     issues.push('이메일: 검증 필요')
   if (lead.audience_display_status === 'not_collected')
