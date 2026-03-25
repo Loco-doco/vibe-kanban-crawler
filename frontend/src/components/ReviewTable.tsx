@@ -127,7 +127,13 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                 <td className="col-subscriber-count">
                   {effectiveAudience
                     ? <span className="subscriber-number">{formatSubscriberCount(effectiveAudience)}</span>
-                    : <span className="text-muted">-</span>
+                    : <span className="subscriber-missing" title={lead.audience_failure_reason || '구독자 수 미수집'}>
+                        {lead.audience_failure_reason === 'fetch_failed' ? '수집 실패'
+                          : lead.audience_failure_reason === 'parse_failed' ? '파싱 실패'
+                          : lead.audience_failure_reason === 'login_required' ? '비공개'
+                          : lead.audience_failure_reason === 'page_structure_changed' ? '구조 변경'
+                          : '미수집'}
+                      </span>
                   }
                 </td>
                 <td>
