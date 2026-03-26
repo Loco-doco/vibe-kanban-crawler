@@ -39,6 +39,7 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
     onUpdated()
+    onClose()
   }
 
   const reviewMutation = useMutation({
