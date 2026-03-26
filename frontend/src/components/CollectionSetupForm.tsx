@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createJob, parsePrompt, type ParsedPrompt } from '../api/jobs'
-import { SUGGESTED_CATEGORIES } from '../types'
+import {
+  SUGGESTED_CATEGORIES,
+  PARSE_CONFIDENCE_LABELS,
+  CONFIDENCE_SIGNAL_LABELS,
+  type ParseConfidenceLevel,
+} from '../types'
 
 interface Props {
   onCreated?: () => void
@@ -35,6 +40,13 @@ const EXAMPLE_PROMPTS = [
   '부동산 투자, 재테크 관련 크리에이터 중 소규모 채널',
 ]
 
+const PARSE_ERROR_TIPS = [
+  '구체적인 카테고리 키워드를 포함해주세요 (예: 뷰티, 요리, 운동)',
+  '구독자 범위를 명시해보세요 (예: 1만~10만)',
+  '플랫폼 이름을 포함하면 더 정확합니다 (예: 유튜브)',
+  '너무 짧거나 모호한 입력은 분석이 어렵습니다',
+]
+
 export default function CollectionSetupForm({ onCreated }: Props) {
   // Step management
   const [step, setStep] = useState<'input' | 'parsing' | 'confirm'>('input')
@@ -54,6 +66,12 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [rawPrompt, setRawPrompt] = useState('')
   const [platformHints, setPlatformHints] = useState<Record<string, boolean>>({})
   const [semanticExpansions, setSemanticExpansions] = useState<Record<string, boolean>>({})
+
+  // Confidence tracking (B-5)
+  const [parseConfidence, setParseConfidence] = useState(0)
+  const [confidenceLevel, setConfidenceLevel] = useState<ParseConfidenceLevel>('high')
+  const [confidenceSignals, setConfidenceSignals] = useState<string[]>([])
+  const [showComparison, setShowComparison] = useState(false)
 
   // Settings
   const [targetCount, setTargetCount] = useState('30')
@@ -87,6 +105,12 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       const exps: Record<string, boolean> = {}
       for (const e of result.semantic_expansions || []) exps[e] = false
       setSemanticExpansions(exps)
+      // Confidence (B-5)
+      setParseConfidence(result.parse_confidence ?? 0)
+      setConfidenceLevel(result.confidence_level ?? 'medium')
+      setConfidenceSignals(result.confidence_signals ?? [])
+      // Auto-show comparison for low confidence
+      setShowComparison(result.confidence_level === 'low')
       setParseError('')
       setStep('confirm')
     },
@@ -111,6 +135,10 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       setRawPrompt('')
       setPlatformHints({})
       setSemanticExpansions({})
+      setParseConfidence(0)
+      setConfidenceLevel('high')
+      setConfidenceSignals([])
+      setShowComparison(false)
       setTargetCount('30')
       setSearchEffort(2)
       setLabel('')
@@ -125,6 +153,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const handleAnalyze = (e: React.FormEvent) => {
     e.preventDefault()
     if (!prompt.trim()) return
+    setParseError('')
     setStep('parsing')
     parseMutation.mutate(prompt.trim())
   }
@@ -226,6 +255,26 @@ export default function CollectionSetupForm({ onCreated }: Props) {
 
   const isProcessing = parseMutation.isPending || createMutation.isPending
   const effortLabel = EFFORT_LEVELS.find((l) => l.value === searchEffort)
+  const isLowConfidence = confidenceLevel === 'low'
+
+  // Build parsed summary for comparison
+  const buildParsedSummary = () => {
+    const parts: string[] = []
+    if (Object.entries(platformHints).some(([, on]) => on)) {
+      const platforms = Object.entries(platformHints)
+        .filter(([, on]) => on)
+        .map(([p]) => PLATFORM_DISPLAY[p] || p)
+      parts.push(`[플랫폼] ${platforms.join(', ')}`)
+    }
+    if (keywords.length > 0) parts.push(`[키워드] ${keywords.join(', ')}`)
+    if (categoryTags.length > 0) parts.push(`[카테고리] ${categoryTags.join(', ')}`)
+    if (subscriberMin || subscriberMax) {
+      const min = subscriberMin ? formatSubscribers(subscriberMin) : '제한 없음'
+      const max = subscriberMax ? formatSubscribers(subscriberMax) : '제한 없음'
+      parts.push(`[구독자] ${min} ~ ${max}`)
+    }
+    return parts.join('\n')
+  }
 
   // Validation
   const validationErrors: string[] = []
@@ -278,26 +327,118 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         </button>
       )}
 
+      {/* parse_failed: error message + retry guide (B-5 Task 4) */}
+      {step === 'input' && (parseError || parseMutation.isError) && (
+        <div className="parse-error-panel">
+          <div className="parse-error-header">
+            <span className="parse-error-icon">!</span>
+            <strong>분석에 실패했습니다</strong>
+          </div>
+          <p className="parse-error-message">
+            {parseError || (parseMutation.error as Error).message}
+          </p>
+          <div className="parse-error-tips">
+            <span className="parse-error-tips-title">다시 시도하려면:</span>
+            <ul className="parse-error-tips-list">
+              {PARSE_ERROR_TIPS.map((tip, i) => (
+                <li key={i}>{tip}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="parse-error-examples">
+            <span className="parse-error-tips-title">예시로 다시 시도:</span>
+            <div className="prompt-examples" style={{ marginTop: 6 }}>
+              {EXAMPLE_PROMPTS.slice(0, 2).map((ex, i) => (
+                <button key={i} type="button" className="prompt-example-chip" onClick={() => { setPrompt(ex); setParseError('') }}>
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Step 2: 편집 가능한 분석 결과 + 설정 */}
       {step === 'confirm' && (
         <>
-          {/* 분석 결과 헤더 */}
+          {/* 분석 결과 헤더 + 신뢰도 표시 (B-5 Task 1) */}
           <div className="parsed-header">
-            <h4 className="setup-section-title" style={{ margin: 0 }}>
-              검색 조건 분석 결과
-            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h4 className="setup-section-title" style={{ margin: 0 }}>
+                검색 조건 분석 결과
+              </h4>
+              <span className={`confidence-badge confidence-${confidenceLevel}`}>
+                {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
+                <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
+              </span>
+            </div>
             <button type="button" className="btn-text" onClick={handleBack}>
               다시 입력
             </button>
           </div>
 
-          {/* 원문 프롬프트 */}
-          {rawPrompt && (
-            <div className="setup-section">
-              <span className="setup-label-inline">원문</span>
-              <div className="raw-prompt-box">{rawPrompt}</div>
+          {/* 신뢰도 시그널 상세 (B-5 Task 1) */}
+          {confidenceSignals.length > 0 && (
+            <div className="confidence-signals">
+              {['keywords_extracted', 'keywords_rich', 'category_detected', 'subscriber_range_detected', 'platform_detected', 'prompt_detailed'].map(sig => (
+                <span
+                  key={sig}
+                  className={`confidence-signal${confidenceSignals.includes(sig) ? ' active' : ''}`}
+                >
+                  {confidenceSignals.includes(sig) ? '\u2713' : '\u2717'} {CONFIDENCE_SIGNAL_LABELS[sig] || sig}
+                </span>
+              ))}
             </div>
           )}
+
+          {/* Low confidence 경고 배너 (B-5 Task 3) */}
+          {isLowConfidence && (
+            <div className="low-confidence-banner">
+              <div className="low-confidence-header">
+                <strong>분석 신뢰도가 낮습니다</strong>
+              </div>
+              <p className="low-confidence-desc">
+                입력한 내용에서 충분한 검색 조건을 추출하지 못했습니다.
+                아래 필드를 직접 수정하거나, 더 구체적인 프롬프트로 다시 시도해주세요.
+              </p>
+              <div className="low-confidence-actions">
+                <button type="button" className="btn btn-small btn-outline" onClick={handleBack}>
+                  프롬프트 다시 작성
+                </button>
+                <span className="low-confidence-or">또는 아래에서 직접 수정</span>
+              </div>
+            </div>
+          )}
+
+          {/* 원문 vs 파싱 결과 비교 UI (B-5 Task 2) */}
+          <div className="setup-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span className="setup-label-inline" style={{ marginBottom: 0 }}>원문</span>
+              <button
+                type="button"
+                className="btn-text"
+                onClick={() => setShowComparison(!showComparison)}
+                style={{ fontSize: '0.75rem' }}
+              >
+                {showComparison ? '비교 닫기' : '파싱 결과 비교'}
+              </button>
+            </div>
+            {showComparison ? (
+              <div className="parse-comparison">
+                <div className="parse-comparison-col">
+                  <span className="parse-comparison-label">입력 원문</span>
+                  <div className="raw-prompt-box">{rawPrompt}</div>
+                </div>
+                <div className="parse-comparison-arrow">{'\u2192'}</div>
+                <div className="parse-comparison-col">
+                  <span className="parse-comparison-label">추출된 조건</span>
+                  <div className="parsed-prompt-box">{buildParsedSummary() || '(추출된 조건 없음)'}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="raw-prompt-box">{rawPrompt}</div>
+            )}
+          </div>
 
           {/* 감지된 플랫폼 힌트 (toggleable, default ON) */}
           {Object.keys(platformHints).length > 0 && (
@@ -320,8 +461,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           )}
 
           {/* 편집 가능: 검색 키워드 */}
-          <div className="setup-section">
-            <span className="setup-label-inline">검색 키워드</span>
+          <div className={`setup-section${isLowConfidence && keywords.length === 0 ? ' field-attention' : ''}`}>
+            <span className="setup-label-inline">
+              검색 키워드
+              {isLowConfidence && keywords.length === 0 && (
+                <span className="field-attention-hint"> &mdash; 직접 추가해주세요</span>
+              )}
+            </span>
             <div className="editable-chips">
               {keywords.map((kw, i) => (
                 <span key={i} className="category-chip active editable-chip">
@@ -338,6 +484,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                     onChange={(e) => setNewKeyword(e.target.value)}
                     onKeyDown={handleKeywordKeyDown}
                     placeholder="+ 키워드 추가"
+                    autoFocus={isLowConfidence && keywords.length === 0}
                   />
                   {newKeyword.trim() && (
                     <button type="button" className="chip-add-btn" onClick={addKeyword}>추가</button>
@@ -354,8 +501,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           </div>
 
           {/* 편집 가능: 카테고리 */}
-          <div className="setup-section">
-            <span className="setup-label-inline">카테고리 태그 <span className="setup-hint">(선택)</span></span>
+          <div className={`setup-section${isLowConfidence && categoryTags.length === 0 ? ' field-attention' : ''}`}>
+            <span className="setup-label-inline">
+              카테고리 태그 <span className="setup-hint">(선택)</span>
+              {isLowConfidence && categoryTags.length === 0 && (
+                <span className="field-attention-hint"> &mdash; 카테고리를 선택하면 정확도가 높아집니다</span>
+              )}
+            </span>
             <div className="category-selector">
               {SUGGESTED_CATEGORIES.map((cat) => (
                 <button
@@ -606,12 +758,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         </>
       )}
 
-      {/* Errors */}
-      {(parseError || parseMutation.isError) && (
-        <p className="setup-error">
-          {parseError || (parseMutation.error as Error).message}
-        </p>
-      )}
+      {/* Create job errors (not parse errors — those are handled above) */}
       {createMutation.isError && (
         <p className="setup-error">
           탐색 생성 실패: {(createMutation.error as Error).message}
