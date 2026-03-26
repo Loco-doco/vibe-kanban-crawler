@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createJob, parsePrompt, type ParsedPrompt } from '../api/jobs'
-import { SUGGESTED_CATEGORIES, PLATFORM_OPTIONS } from '../types'
-import type { CreateJobPayload } from '../types'
+import {
+  SUGGESTED_CATEGORIES,
+  PLATFORM_OPTIONS,
+  PARSE_CONFIDENCE_LABELS,
+  CONFIDENCE_SIGNAL_LABELS,
+} from '../types'
+import type { CreateJobPayload, ParseConfidenceLevel } from '../types'
 
 interface Props {
   onCreated?: () => void
@@ -87,6 +92,13 @@ function formatFollowers(val: string) {
   return `${num}명`
 }
 
+const PARSE_ERROR_TIPS = [
+  '구체적인 카테고리 키워드를 포함해주세요 (예: 뷰티, 요리, 운동)',
+  '구독자 범위를 명시해보세요 (예: 1만~10만)',
+  '플랫폼 이름을 포함하면 더 정확합니다 (예: 유튜브)',
+  '너무 짧거나 모호한 입력은 분석이 어렵습니다',
+]
+
 export default function CollectionSetupForm({ onCreated }: Props) {
   const [step, setStep] = useState<'form' | 'confirm'>('form')
   const [prompt, setPrompt] = useState('')
@@ -95,6 +107,14 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const [newClue, setNewClue] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
+
+  // B-5: Confidence tracking
+  const [parseConfidence, setParseConfidence] = useState(0)
+  const [confidenceLevel, setConfidenceLevel] = useState<ParseConfidenceLevel>('high')
+  const [confidenceSignals, setConfidenceSignals] = useState<string[]>([])
+  const [showComparison, setShowComparison] = useState(false)
+  const [rawPrompt, setRawPrompt] = useState('')
+
   const queryClient = useQueryClient()
 
   const updateForm = (partial: Partial<SearchFormState>) => setForm(prev => ({ ...prev, ...partial }))
@@ -117,6 +137,12 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         min_followers: result.subscriber_min ? String(result.subscriber_min) : prev.min_followers,
         max_followers: result.subscriber_max ? String(result.subscriber_max) : prev.max_followers,
       }))
+      // B-5: Confidence
+      setParseConfidence(result.parse_confidence ?? 0)
+      setConfidenceLevel(result.confidence_level ?? 'medium')
+      setConfidenceSignals(result.confidence_signals ?? [])
+      setRawPrompt(result.raw_prompt || prompt)
+      setShowComparison(result.confidence_level === 'low')
       setParseError('')
       setIsParsing(false)
     },
@@ -132,6 +158,11 @@ export default function CollectionSetupForm({ onCreated }: Props) {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       setPrompt('')
       setForm(defaultForm)
+      setParseConfidence(0)
+      setConfidenceLevel('high')
+      setConfidenceSignals([])
+      setShowComparison(false)
+      setRawPrompt('')
       setStep('form')
       onCreated?.()
     },
@@ -141,6 +172,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const handleAnalyze = () => {
     if (!prompt.trim()) return
     setIsParsing(true)
+    setParseError('')
     parseMutation.mutate(prompt.trim())
   }
 
@@ -171,6 +203,22 @@ export default function CollectionSetupForm({ onCreated }: Props) {
     updateForm({ categories: form.categories.filter(c => c !== cat) })
   }
 
+  // B-5: Build parsed summary for comparison
+  const buildParsedSummary = () => {
+    const parts: string[] = []
+    if (form.primary_platform) parts.push(`[플랫폼] ${PLATFORM_OPTIONS.find(p => p.value === form.primary_platform)?.label || form.primary_platform}`)
+    if (form.search_clues.length > 0) parts.push(`[키워드] ${form.search_clues.join(', ')}`)
+    if (form.categories.length > 0) parts.push(`[카테고리] ${form.categories.join(', ')}`)
+    if (form.min_followers || form.max_followers) {
+      const min = form.min_followers ? formatFollowers(form.min_followers) : '제한 없음'
+      const max = form.max_followers ? formatFollowers(form.max_followers) : '제한 없음'
+      parts.push(`[구독자] ${min} ~ ${max}`)
+    }
+    if (form.target_persona) parts.push(`[대상] ${form.target_persona}`)
+    if (form.exclude_conditions) parts.push(`[제외] ${form.exclude_conditions}`)
+    return parts.join('\n')
+  }
+
   // --- Validation ---
   const canStart = form.search_clues.length > 0 || form.target_persona.trim() !== '' || form.categories.length > 0
   const validationErrors: string[] = []
@@ -185,6 +233,8 @@ export default function CollectionSetupForm({ onCreated }: Props) {
   const effortLabel = EFFORT_LEVELS.find(l => l.value === form.search_effort)
   const platformLabel = PLATFORM_OPTIONS.find(p => p.value === form.primary_platform)?.label || form.primary_platform
   const suggestedCategories = SUGGESTED_CATEGORIES.filter(c => !form.categories.includes(c))
+  const isLowConfidence = confidenceLevel === 'low'
+  const hasParsed = confidenceSignals.length > 0
 
   return (
     <div className="setup-form">
@@ -216,16 +266,97 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                 {isParsing ? '해석 중...' : '자동 채우기'}
               </button>
             )}
-            {parseError && <span className="setup-error" style={{ marginTop: 4 }}>{parseError}</span>}
           </div>
+
+          {/* B-5: Parse error panel with retry guide */}
+          {parseError && (
+            <div className="parse-error-panel">
+              <div className="parse-error-header">
+                <span className="parse-error-icon">!</span>
+                <strong>분석에 실패했습니다</strong>
+              </div>
+              <p className="parse-error-message">{parseError}</p>
+              <div className="parse-error-tips">
+                <span className="parse-error-tips-title">다시 시도하려면:</span>
+                <ul className="parse-error-tips-list">
+                  {PARSE_ERROR_TIPS.map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* B-5: Confidence badge + signals (shown after successful parse) */}
+          {hasParsed && !parseError && (
+            <div className="setup-section" style={{ paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span className={`confidence-badge confidence-${confidenceLevel}`}>
+                  {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
+                  <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-text"
+                  onClick={() => setShowComparison(!showComparison)}
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  {showComparison ? '비교 닫기' : '파싱 결과 비교'}
+                </button>
+              </div>
+              <div className="confidence-signals">
+                {['keywords_extracted', 'keywords_rich', 'category_detected', 'subscriber_range_detected', 'platform_detected', 'prompt_detailed'].map(sig => (
+                  <span
+                    key={sig}
+                    className={`confidence-signal${confidenceSignals.includes(sig) ? ' active' : ''}`}
+                  >
+                    {confidenceSignals.includes(sig) ? '\u2713' : '\u2717'} {CONFIDENCE_SIGNAL_LABELS[sig] || sig}
+                  </span>
+                ))}
+              </div>
+
+              {/* B-5: Parse comparison (raw vs parsed) */}
+              {showComparison && (
+                <div className="parse-comparison" style={{ marginTop: 8 }}>
+                  <div className="parse-comparison-col">
+                    <span className="parse-comparison-label">입력 원문</span>
+                    <div className="raw-prompt-box">{rawPrompt}</div>
+                  </div>
+                  <div className="parse-comparison-arrow">{'\u2192'}</div>
+                  <div className="parse-comparison-col">
+                    <span className="parse-comparison-label">추출된 조건</span>
+                    <div className="parsed-prompt-box">{buildParsedSummary() || '(추출된 조건 없음)'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* B-5: Low confidence banner */}
+              {isLowConfidence && (
+                <div className="low-confidence-banner" style={{ marginTop: 10 }}>
+                  <div className="low-confidence-header">
+                    <strong>분석 신뢰도가 낮습니다</strong>
+                  </div>
+                  <p className="low-confidence-desc">
+                    입력한 내용에서 충분한 검색 조건을 추출하지 못했습니다.
+                    아래 필드를 직접 수정하거나, 더 구체적인 프롬프트로 다시 시도해주세요.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="search-form-divider">
             <span>탐색 조건</span>
           </div>
 
           {/* 검색 단서 */}
-          <div className="search-field-group">
-            <span className="setup-label-inline">검색 키워드</span>
+          <div className={`search-field-group${isLowConfidence && form.search_clues.length === 0 ? ' field-attention' : ''}`}>
+            <span className="setup-label-inline">
+              검색 키워드
+              {isLowConfidence && form.search_clues.length === 0 && (
+                <span className="field-attention-hint"> &mdash; 직접 추가해주세요</span>
+              )}
+            </span>
             <div className="search-clue-list">
               {form.search_clues.map((clue, i) => (
                 <div key={i} className="search-clue-item">
@@ -251,6 +382,7 @@ export default function CollectionSetupForm({ onCreated }: Props) {
                     onChange={e => setNewClue(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addClue() } }}
                     placeholder="+ 키워드 추가 (Enter)"
+                    autoFocus={isLowConfidence && form.search_clues.length === 0}
                   />
                   {newClue.trim() && (
                     <button type="button" className="btn-small btn-view-results" onClick={addClue}>추가</button>
@@ -261,8 +393,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
           </div>
 
           {/* 카테고리 */}
-          <div className="search-field-group">
-            <span className="setup-label-inline">카테고리 / 니치</span>
+          <div className={`search-field-group${isLowConfidence && form.categories.length === 0 ? ' field-attention' : ''}`}>
+            <span className="setup-label-inline">
+              카테고리 / 니치
+              {isLowConfidence && form.categories.length === 0 && (
+                <span className="field-attention-hint"> &mdash; 카테고리를 선택하면 정확도가 높아집니다</span>
+              )}
+            </span>
             {form.categories.length > 0 && (
               <div className="category-selected-tags">
                 {form.categories.map(cat => (
@@ -421,6 +558,13 @@ export default function CollectionSetupForm({ onCreated }: Props) {
         <>
           <div className="parsed-header">
             <h4 className="setup-section-title" style={{ margin: 0 }}>탐색 요약</h4>
+            {/* B-5: Show confidence in confirm step too */}
+            {hasParsed && (
+              <span className={`confidence-badge confidence-${confidenceLevel}`}>
+                {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
+                <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
+              </span>
+            )}
           </div>
 
           <div className="search-summary-card">
