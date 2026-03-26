@@ -148,22 +148,18 @@ export interface QualityMetrics {
   enrichment_coverage_rate: number
   judgment: QualityJudgment
   suggested_supplement: SupplementaryType | null
+  contactable_leads: number
   platform_suspect_leads: number
   no_email_leads: number
-  // Workflow state counts (mutually exclusive)
-  unreviewed_leads: number
-  needs_enrichment_leads: number
-  contactable_leads: number
-  on_hold_leads: number
-  excluded_leads: number
-  synced_leads: number
-  conflict_queue_leads: number
-  ready_to_sync_leads: number
-  // Backward compat aliases
   needs_review_leads: number
   held_leads: number
   needs_verification_leads: number
   needs_correction_leads: number
+  excluded_leads: number
+  // Master pipeline counts (B1+B2)
+  conflict_queue_leads: number
+  ready_to_sync_leads: number
+  synced_leads: number
 }
 
 export interface EditHistoryEntry {
@@ -221,15 +217,27 @@ export interface AddToMasterListResult {
 export interface MasterListLead {
   id: number
   email: string | null
-  email_verified: boolean
   platform: string
   channel_name: string | null
   channel_url: string | null
   evidence_link: string
   subscriber_count: number | null
   status: string
+  review_status: ReviewStatus
+  master_sync_status: MasterSyncStatus
+  email_status: EmailStatus
+  contact_email: string | null
+  display_name: string | null
+  contact_readiness: ContactReadiness
+  audience_tier: AudienceTier | null
+  audience_tier_override: AudienceTier | null
+  audience_size_override: number | null
+  enrichment_status: EnrichmentStatus
+  priority_score: number
+  confidence_score: number
   notes: string | null
   job_id: number | null
+  synced_at: string
   inserted_at: string
 }
 
@@ -269,9 +277,6 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
   search_result: '검색결과',
   external_site: '외부사이트',
   contact_page: '연락처',
-  social_profile: '소셜 프로필',
-  domain_guess: '도메인 추측',
-  bio_link: '바이오 링크',
 }
 
 export const REVIEW_STATUS_LABELS: Record<string, string> = {
@@ -379,12 +384,4 @@ export const SUGGESTED_CATEGORIES = [
   '주식', '부업', '재테크', 'AI', '자기계발', '건강',
   '요리', '여행', '뷰티', '패션', '육아', '교육',
   '마케팅', '비즈니스', '부동산', '코칭', '운동',
-]
-
-export const PLATFORM_OPTIONS: { value: string; label: string }[] = [
-  { value: 'youtube', label: '유튜브' },
-  { value: 'instagram', label: '인스타그램' },
-  { value: 'class101', label: 'Class101' },
-  { value: 'liveklass', label: '라이브클래스' },
-  { value: 'taling', label: '탈잉' },
 ]
