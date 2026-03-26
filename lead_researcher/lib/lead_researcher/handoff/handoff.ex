@@ -20,6 +20,7 @@ defmodule LeadResearcher.Handoff do
   import Ecto.Query
   alias LeadResearcher.Repo
   alias LeadResearcher.Leads.Lead
+  alias LeadResearcher.MasterList.MasterListEntry
 
   @comparison_statuses ["synced", "ready_to_sync", "conflict_queue"]
 
@@ -218,21 +219,37 @@ defmodule LeadResearcher.Handoff do
   end
 
   @doc """
-  Final sync: move ready_to_sync leads to synced.
+  Final sync: move ready_to_sync leads to synced and create MasterListEntry records.
   Only leads currently in ready_to_sync are affected (WHERE guard).
   Returns {:ok, %{synced: count}}
   """
   def sync_to_master(lead_ids) when is_list(lead_ids) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    {count, _} =
+    # Fetch leads that will actually be synced (only ready_to_sync)
+    leads_to_sync =
       from(l in Lead,
         where: l.id in ^lead_ids,
         where: l.master_sync_status == "ready_to_sync"
       )
+      |> Repo.all()
+
+    synced_ids = Enum.map(leads_to_sync, & &1.id)
+
+    if synced_ids != [] do
+      # Update master_sync_status to synced
+      from(l in Lead, where: l.id in ^synced_ids)
       |> Repo.update_all(set: [master_sync_status: "synced", updated_at: now])
 
-    {:ok, %{synced: count}}
+      # Create MasterListEntry for each synced lead (upsert: skip if already exists)
+      Enum.each(leads_to_sync, fn lead ->
+        %MasterListEntry{}
+        |> MasterListEntry.changeset(%{lead_id: lead.id, job_id: lead.job_id})
+        |> Repo.insert(on_conflict: :nothing, conflict_target: :lead_id)
+      end)
+    end
+
+    {:ok, %{synced: length(synced_ids)}}
   end
 
   # --- Private helpers ---
