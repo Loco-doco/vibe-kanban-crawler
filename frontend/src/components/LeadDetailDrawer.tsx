@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { bulkReview, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
-import type { ReviewStatus } from '../types'
+import { updateLead, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
 import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
   CONTACT_READINESS_LABELS,
   SUSPECT_REASON_LABELS,
+  AUDIENCE_TIER_LABELS,
+  AUDIENCE_DISPLAY_STATUS_LABELS,
   AUDIENCE_FAILURE_REASON_LABELS,
   REVIEW_STATUS_LABELS,
   MASTER_SYNC_LABELS,
@@ -16,34 +17,36 @@ interface Props {
   activeQueue: string
   onClose: () => void
   onUpdated: () => void
+  onOpenFullDetail: () => void
 }
 
-function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
+type ActionType = 'system' | 'user'
+
+function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low'; actionType: ActionType } {
   if (lead.contact_readiness === 'no_email')
-    return { label: '이메일 확보 필요', priority: 'high' }
+    return { label: '이메일 확보 필요', priority: 'high', actionType: 'user' }
   if (lead.contact_readiness === 'platform_suspect')
-    return { label: '이메일 검증 필요', priority: 'high' }
+    return { label: '이메일 검증 필요', priority: 'high', actionType: 'user' }
   if (lead.audience_display_status === 'not_collected')
-    return { label: '영향력 보정 필요', priority: 'medium' }
+    return { label: '영향력 보정', priority: 'medium', actionType: 'system' }
   if (lead.enrichment_status === 'not_started')
-    return { label: '프로필 보강 필요', priority: 'medium' }
+    return { label: '프로필 보강', priority: 'medium', actionType: 'system' }
   if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
-    return { label: '연락 가능', priority: 'low' }
-  return { label: '검토 필요', priority: 'medium' }
+    return { label: '연락 가능', priority: 'low', actionType: 'user' }
+  return { label: '검토 필요', priority: 'medium', actionType: 'user' }
 }
 
-export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated }: Props) {
+export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated, onOpenFullDetail }: Props) {
   const queryClient = useQueryClient()
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
     onUpdated()
-    onClose()
   }
 
-  const reviewMutation = useMutation({
-    mutationFn: (status: ReviewStatus) => bulkReview([lead.id], status),
+  const updateMutation = useMutation({
+    mutationFn: (fields: Partial<Lead>) => updateLead(lead.id, fields),
     onSuccess: invalidateAll,
   })
 
@@ -66,11 +69,11 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     if (status === 'approved') {
       approveMutation.mutate()
     } else {
-      reviewMutation.mutate(status as ReviewStatus)
+      updateMutation.mutate({ review_status: status } as Partial<Lead>)
     }
   }
 
-  const isPending = reviewMutation.isPending || approveMutation.isPending ||
+  const isPending = updateMutation.isPending || approveMutation.isPending ||
     resolveConflictMutation.isPending || syncMutation.isPending
 
   const action = getRecommendedAction(lead)
@@ -80,7 +83,7 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
   if (lead.contact_readiness === 'platform_suspect')
     issues.push(`이메일: 플랫폼 메일 의심${lead.suspect_reason ? ` (${SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason})` : ''}`)
   if (lead.contact_readiness === 'no_email')
-    issues.push('이메일: 없음 — 채널 페이지, 소셜 링크에서 이메일을 찾지 못했습니다. 프로필 보강을 실행하세요.')
+    issues.push('이메일: 없음 — 수집 필요')
   if (lead.contact_readiness === 'needs_verification')
     issues.push('이메일: 검증 필요')
   if (lead.audience_display_status === 'not_collected')
@@ -186,17 +189,17 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
           <button
             className="judgment-btn approve"
             onClick={() => handleReviewAction('approved')}
-            disabled={isPending || lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'}
-          >연락 대상으로 이동</button>
+            disabled={lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'}
+          >승인 + 대기열</button>
           <button
             className="judgment-btn hold"
             onClick={() => handleReviewAction('held')}
-            disabled={isPending || lead.review_status === 'held'}
+            disabled={lead.review_status === 'held'}
           >보류</button>
           <button
             className="judgment-btn reject"
             onClick={() => handleReviewAction('rejected')}
-            disabled={isPending || lead.review_status === 'rejected'}
+            disabled={lead.review_status === 'rejected'}
           >제외</button>
         </div>
       </div>
@@ -241,7 +244,7 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
             <div className="quick-detail-reason">{queueReason}</div>
             {activeQueue !== 'conflict_queue' && activeQueue !== 'ready_to_sync' && activeQueue !== 'synced' && (
               <div className={`judgment-action action-${action.priority}`}>
-                추천: {action.label}
+                {action.actionType === 'system' ? '\u2699 시스템' : '\u270B 사용자'}: {action.label}
               </div>
             )}
           </div>
@@ -287,11 +290,18 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
               </div>
             )}
             <div className="quick-detail-field">
-              <span className="quick-detail-label">구독자</span>
+              <span className="quick-detail-label">영향력</span>
               <span className="quick-detail-value">
-                {lead.effective_audience_size
-                  ? lead.effective_audience_size.toLocaleString('ko-KR')
-                  : '미수집'}
+                {lead.audience_display_status === 'collected' ? (
+                  <>
+                    {lead.effective_audience_label || `${lead.effective_audience_size}`}
+                    {lead.effective_audience_tier && (
+                      <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
+                        {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
+                      </span>
+                    )}
+                  </>
+                ) : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
               </span>
             </div>
           </div>
@@ -299,18 +309,10 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
           {/* Tier 4: Actions (context-dependent) */}
           {renderActions()}
 
-          {/* Channel link as detail CTA instead of modal */}
-          {lead.channel_url && (
-            <a
-              href={lead.channel_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="full-detail-cta"
-              style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}
-            >
-              채널 페이지 열기 &rarr;
-            </a>
-          )}
+          {/* Full Detail CTA */}
+          <button className="full-detail-cta" onClick={onOpenFullDetail}>
+            상세 보기 &rarr;
+          </button>
         </div>
       </div>
     </div>
