@@ -76,41 +76,46 @@ export default function QualityBanner({
   channelEnrichState = 'idle',
   channelDisabledReason,
 }: Props) {
-  // Don't show banner when quality is healthy (no action needed)
-  if (quality.judgment === 'healthy') return null
-
+  const isHealthy = quality.judgment === 'healthy'
   const style = JUDGMENT_STYLE[quality.judgment]
-  const label = QUALITY_JUDGMENT_LABELS[quality.judgment]
-
-  // For low_audience_coverage, show "영향력 보정 실행" (updates existing leads, not new search)
+  const label = isHealthy ? '데이터 품질 양호' : QUALITY_JUDGMENT_LABELS[quality.judgment]
   const isAudienceGap = quality.suggested_supplement === 'audience_supplement'
+
+  // Always show enrichment buttons so user can manually trigger
+  const hasEnrichActions = onEnrichSubscribers || onEnrichChannels || quality.suggested_supplement
+
+  if (isHealthy && !hasEnrichActions) return null
 
   return (
     <div className={`quality-banner ${style}`}>
       <span className="quality-banner-text">{label}</span>
       <div className="quality-banner-actions">
-        {isAudienceGap && onEnrichSubscribers ? (
+        {/* 영향력 보정 — 항상 표시 */}
+        {onEnrichSubscribers && (
           <EnrichButton
-            label="영향력 보정 실행"
+            label="영향력 보정"
             onClick={onEnrichSubscribers}
             state={subscriberEnrichState}
             disabledReason={subscriberDisabledReason}
           />
-        ) : quality.suggested_supplement && !isAudienceGap ? (
+        )}
+        {/* 프로필 보강 — 항상 표시 */}
+        {onEnrichChannels && (
+          <EnrichButton
+            label="프로필 보강"
+            onClick={onEnrichChannels}
+            state={channelEnrichState}
+            disabledReason={channelDisabledReason}
+          />
+        )}
+        {/* 보완 탐색 — 추천 시에만 */}
+        {quality.suggested_supplement && !isAudienceGap && (
           <button
             className="quality-banner-cta"
             onClick={() => onSupplementarySearch(quality.suggested_supplement!)}
           >
             {SUPPLEMENT_CTA[quality.suggested_supplement] || '보완 탐색'}
           </button>
-        ) : null}
-        {onEnrichChannels && quality.enrichment_coverage_rate < 1.0 && (
-          <EnrichButton
-            label="프로필 보강 실행"
-            onClick={onEnrichChannels}
-            state={channelEnrichState}
-            disabledReason={channelDisabledReason}
-          />
         )}
       </div>
     </div>
