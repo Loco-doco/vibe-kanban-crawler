@@ -85,6 +85,10 @@ export interface ParsedPrompt {
   platform_hints?: string[]
   semantic_expansions?: string[]
   extra_conditions?: string | null
+  // B-5: Confidence scoring
+  parse_confidence: number
+  confidence_level: 'high' | 'medium' | 'low'
+  confidence_signals: string[]
 }
 
 export async function parsePrompt(prompt: string): Promise<ParsedPrompt> {
