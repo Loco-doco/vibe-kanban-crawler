@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
+import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun, getEnrichmentRuns } from '../api/jobs'
 import type { EnrichmentRun } from '../api/jobs'
 import { getLeads, getQuality, bulkReview, approveAndQueue, bulkResolveConflicts, syncToMaster } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
@@ -111,6 +111,37 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     enabled: activeJobId !== null,
   })
 
+  // Fetch enrichment runs for the active job to auto-detect running enrichment
+  const { data: enrichmentRuns } = useQuery({
+    queryKey: ['enrichment-runs', activeJobId],
+    queryFn: () => getEnrichmentRuns(activeJobId!),
+    enabled: activeJobId !== null,
+    refetchInterval: subscriberEnrichState === 'idle' && channelEnrichState === 'idle' ? 10000 : false,
+  })
+
+  // Auto-detect running enrichment runs (from auto post-processing)
+  useEffect(() => {
+    if (!enrichmentRuns) return
+
+    // Find the latest running subscriber run
+    if (subscriberEnrichState === 'idle') {
+      const runningSubRun = enrichmentRuns.find(r => r.run_type === 'subscribers' && r.status === 'running')
+      if (runningSubRun) {
+        setSubscriberRunId(runningSubRun.id)
+        setSubscriberEnrichState('running')
+      }
+    }
+
+    // Find the latest running channel run
+    if (channelEnrichState === 'idle') {
+      const runningChRun = enrichmentRuns.find(r => r.run_type === 'channels' && r.status === 'running')
+      if (runningChRun) {
+        setChannelRunId(runningChRun.id)
+        setChannelEnrichState('running')
+      }
+    }
+  }, [enrichmentRuns, subscriberEnrichState, channelEnrichState])
+
   // Enrichment run polling
   const { data: subscriberRun } = useQuery({
     queryKey: ['enrichment-run', subscriberRunId],
@@ -126,17 +157,19 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     refetchInterval: 3000,
   })
 
-  // Auto-complete enrichment states when runs finish
+  // Auto-complete enrichment states when runs finish → refresh leads + quality
   if (subscriberRun && subscriberRun.status !== 'running' && subscriberEnrichState === 'running') {
     setSubscriberEnrichState(subscriberRun.status === 'completed' ? 'done' : 'error')
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
+    queryClient.invalidateQueries({ queryKey: ['enrichment-runs'] })
   }
 
   if (channelRun && channelRun.status !== 'running' && channelEnrichState === 'running') {
     setChannelEnrichState(channelRun.status === 'completed' ? 'done' : 'error')
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
+    queryClient.invalidateQueries({ queryKey: ['enrichment-runs'] })
   }
 
   // Bulk review mutation (held/rejected)
