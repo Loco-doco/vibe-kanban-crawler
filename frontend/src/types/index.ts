@@ -11,6 +11,7 @@ export type EnrichmentStatus = 'not_started' | 'completed' | 'low_confidence' | 
 export type QualityJudgment = 'healthy' | 'low_email_coverage' | 'high_invalid_email_rate' | 'low_audience_coverage'
 export type SupplementaryType = 'email_supplement' | 'audience_supplement' | 'meta_supplement'
 export type AudienceFailureReason = 'fetch_failed' | 'parse_failed' | 'login_required' | 'unsupported_platform' | 'page_structure_changed' | 'rate_limited'
+export type ParseConfidenceLevel = 'high' | 'medium' | 'low'
 
 export interface Job {
   id: number
@@ -366,6 +367,21 @@ export const TERMINATION_SENTENCES: Record<string, string> = {
   timeout: '제한 시간 내 탐색이 완료되지 못했습니다.',
   system_error: '시스템 오류로 탐색이 중단되었습니다.',
   user_cancelled: '사용자가 탐색을 중단했습니다.',
+}
+
+export const PARSE_CONFIDENCE_LABELS: Record<string, string> = {
+  high: '분석 신뢰도 높음',
+  medium: '분석 신뢰도 보통',
+  low: '분석 신뢰도 낮음',
+}
+
+export const CONFIDENCE_SIGNAL_LABELS: Record<string, string> = {
+  keywords_extracted: '키워드 추출됨',
+  keywords_rich: '키워드 다양',
+  category_detected: '카테고리 감지됨',
+  subscriber_range_detected: '구독자 범위 감지됨',
+  platform_detected: '플랫폼 감지됨',
+  prompt_detailed: '상세한 프롬프트',
 }
 
 export const SUGGESTED_CATEGORIES = [
