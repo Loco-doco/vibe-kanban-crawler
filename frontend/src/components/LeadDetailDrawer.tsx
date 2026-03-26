@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateLead, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
-import type { Lead } from '../types'
+import type { Lead, ContactReadiness } from '../types'
 import {
   PLATFORM_LABELS,
   CONTACT_READINESS_LABELS,
@@ -10,6 +10,8 @@ import {
   AUDIENCE_FAILURE_REASON_LABELS,
   REVIEW_STATUS_LABELS,
   MASTER_SYNC_LABELS,
+  ENRICHMENT_STATUS_LABELS,
+  SOURCE_TYPE_LABELS,
 } from '../types'
 
 interface Props {
@@ -20,20 +22,81 @@ interface Props {
   onOpenFullDetail: () => void
 }
 
-type ActionType = 'system' | 'user'
+/* ── Contact category derivation (same logic as ReviewTable for color unification) ── */
+type ContactCategory = 'direct_contact' | 'shared_email' | 'platform_email' | 'needs_check'
 
-function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low'; actionType: ActionType } {
+const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
+  direct_contact: '직접 연락 가능',
+  shared_email: '공용 메일',
+  platform_email: '플랫폼 메일 의심',
+  needs_check: '검증 필요',
+}
+
+const CONTACT_CATEGORY_VARIANTS: Record<ContactCategory, string> = {
+  direct_contact: 'positive',
+  shared_email: 'caution',
+  platform_email: 'warning',
+  needs_check: 'muted',
+}
+
+function deriveContactCategory(lead: Lead): ContactCategory {
+  if (lead.contact_readiness === 'contactable' || lead.contact_readiness === 'user_confirmed')
+    return 'direct_contact'
+  if (lead.contact_readiness === 'platform_suspect' && lead.suspect_reason) {
+    if (lead.suspect_reason.startsWith('prefix_')) return 'shared_email'
+    return 'platform_email'
+  }
+  return 'needs_check'
+}
+
+/* ── Recommended action (same logic as ReviewTable) ── */
+function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
   if (lead.contact_readiness === 'no_email')
-    return { label: '이메일 확보 필요', priority: 'high', actionType: 'user' }
+    return { label: '이메일 확보 필요', priority: 'high' }
   if (lead.contact_readiness === 'platform_suspect')
-    return { label: '이메일 검증 필요', priority: 'high', actionType: 'user' }
+    return { label: '이메일 검증 필요', priority: 'high' }
   if (lead.audience_display_status === 'not_collected')
-    return { label: '영향력 보정', priority: 'medium', actionType: 'system' }
+    return { label: '영향력 보정 필요', priority: 'medium' }
   if (lead.enrichment_status === 'not_started')
-    return { label: '프로필 보강', priority: 'medium', actionType: 'system' }
+    return { label: '프로필 보강 필요', priority: 'medium' }
   if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
-    return { label: '연락 가능', priority: 'low', actionType: 'user' }
-  return { label: '검토 필요', priority: 'medium', actionType: 'user' }
+    return { label: '연락 가능', priority: 'low' }
+  return { label: '검토 필요', priority: 'medium' }
+}
+
+/* ── Select/exclude reasons ── */
+function getSelectReasons(lead: Lead): string[] {
+  const reasons: string[] = []
+  if (lead.contact_readiness === 'contactable' || lead.contact_readiness === 'user_confirmed')
+    reasons.push('유효한 이메일 확보됨')
+  if (lead.effective_audience_tier === 'macro' || lead.effective_audience_tier === 'mega')
+    reasons.push(`높은 영향력 (${AUDIENCE_TIER_LABELS[lead.effective_audience_tier]})`)
+  if (lead.effective_audience_tier === 'mid')
+    reasons.push(`중간 영향력 (${AUDIENCE_TIER_LABELS[lead.effective_audience_tier]})`)
+  if (lead.confidence_score >= 0.8)
+    reasons.push(`높은 발견 신뢰도 (${Math.round(lead.confidence_score * 100)}%)`)
+  if (lead.enrichment && lead.enrichment.enrichment_confidence && lead.enrichment.enrichment_confidence >= 0.7)
+    reasons.push(`프로필 보강 완료 (신뢰도 ${Math.round(lead.enrichment.enrichment_confidence * 100)}%)`)
+  if (lead.normalized_tags.length > 0)
+    reasons.push(`카테고리 매칭: ${lead.normalized_tags.slice(0, 3).join(', ')}`)
+  return reasons
+}
+
+function getExcludeReasons(lead: Lead): string[] {
+  const reasons: string[] = []
+  if (lead.contact_readiness === 'no_email')
+    reasons.push('이메일 없음')
+  if (lead.contact_readiness === 'platform_suspect')
+    reasons.push(`플랫폼/공용 메일 의심${lead.suspect_reason ? ` — ${SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}` : ''}`)
+  if (lead.contact_readiness === 'needs_verification')
+    reasons.push('이메일 형식 검증 필요')
+  if (lead.audience_display_status === 'not_collected')
+    reasons.push(`영향력 미수집${lead.audience_failure_reason ? ` (${AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason})` : ''}`)
+  if (lead.enrichment_status === 'not_started' || lead.enrichment_status === 'failed')
+    reasons.push(`프로필 보강 ${ENRICHMENT_STATUS_LABELS[lead.enrichment_status]}`)
+  if (lead.confidence_score < 0.5)
+    reasons.push(`낮은 발견 신뢰도 (${Math.round(lead.confidence_score * 100)}%)`)
+  return reasons
 }
 
 export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated, onOpenFullDetail }: Props) {
@@ -77,23 +140,13 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     resolveConflictMutation.isPending || syncMutation.isPending
 
   const action = getRecommendedAction(lead)
+  const contactCat = deriveContactCategory(lead)
+  const selectReasons = getSelectReasons(lead)
+  const excludeReasons = getExcludeReasons(lead)
+  const email = lead.contact_email || lead.email
+  const isPipelineTab = ['conflict_queue', 'ready_to_sync', 'synced'].includes(activeQueue)
 
-  // Derive current issues for "현재 문제" section
-  const issues: string[] = []
-  if (lead.contact_readiness === 'platform_suspect')
-    issues.push(`이메일: 플랫폼 메일 의심${lead.suspect_reason ? ` (${SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason})` : ''}`)
-  if (lead.contact_readiness === 'no_email')
-    issues.push('이메일: 없음 — 수집 필요')
-  if (lead.contact_readiness === 'needs_verification')
-    issues.push('이메일: 검증 필요')
-  if (lead.audience_display_status === 'not_collected')
-    issues.push(`영향력: 미수집${lead.audience_failure_reason ? ` (${AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason})` : ''}`)
-  if (lead.enrichment_status === 'not_started')
-    issues.push('프로필 보강: 미시작')
-  if (lead.enrichment_status === 'low_confidence')
-    issues.push('프로필 보강: 신뢰도 낮음')
-
-  // Queue assignment reason — varies by active queue
+  // Queue assignment reason
   const queueReason = (() => {
     if (activeQueue === 'conflict_queue')
       return '"충돌 확인" 큐 — 기존 리드와 중복 가능성이 감지되었습니다'
@@ -119,7 +172,6 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
     if (activeQueue === 'conflict_queue') {
       return (
         <div className="quick-detail-section">
-          {/* Conflict details */}
           {lead.conflict_details && lead.conflict_details.length > 0 && (
             <div className="conflict-details-section">
               <div className="quick-detail-section-title">
@@ -209,7 +261,7 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
   return (
     <div className="drawer-overlay" onClick={onClose}>
       <div className="drawer-panel" onClick={e => e.stopPropagation()}>
-        {/* Header */}
+        {/* ── Header: 식별 정보 ── */}
         <div className="drawer-header">
           <div className="drawer-header-info">
             <h2 className="drawer-title">{lead.effective_name || '(이름 없음)'}</h2>
@@ -235,62 +287,76 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
         )}
 
         <div className="drawer-body">
-          {/* Tier 1: 왜 이 리드를 봐야 하는가 */}
+          {/* ── Tier 1: 이메일/연락 상태 (최상위, 큼직하게) ── */}
+          <div className="quick-detail-section drawer-email-hero">
+            <div className="drawer-email-status-row">
+              <span className={`contact-category-badge ${CONTACT_CATEGORY_VARIANTS[contactCat]}`}>
+                {CONTACT_CATEGORY_LABELS[contactCat]}
+              </span>
+              {lead.suspect_reason && (
+                <span className="suspect-reason-detail">
+                  {SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}
+                </span>
+              )}
+            </div>
+            <div className="drawer-email-address">
+              {email || <span className="text-muted">(이메일 없음)</span>}
+            </div>
+            {lead.contact_email && lead.email && lead.contact_email !== lead.email && (
+              <div className="drawer-email-original">
+                원본: {lead.email}
+              </div>
+            )}
+            {lead.channel_url && (
+              <a href={lead.channel_url} target="_blank" rel="noopener noreferrer" className="drawer-channel-link">
+                {lead.channel_url.length > 50 ? lead.channel_url.slice(0, 50) + '...' : lead.channel_url}
+                {' \u2197'}
+              </a>
+            )}
+          </div>
+
+          {/* ── Tier 2: 판단 근거 (evidence-first) ── */}
           <div className="quick-detail-section">
             <div className="quick-detail-section-title">
               <span className="quick-detail-icon">{'\u26A1'}</span>
-              이 리드를 봐야 하는 이유
+              판단 근거
             </div>
             <div className="quick-detail-reason">{queueReason}</div>
-            {activeQueue !== 'conflict_queue' && activeQueue !== 'ready_to_sync' && activeQueue !== 'synced' && (
+            {!isPipelineTab && (
               <div className={`judgment-action action-${action.priority}`}>
-                {action.actionType === 'system' ? '\u2699 시스템' : '\u270B 사용자'}: {action.label}
+                추천: {action.label}
+              </div>
+            )}
+
+            {/* Select reasons */}
+            {selectReasons.length > 0 && (
+              <div className="drawer-evidence-block select-evidence">
+                <div className="drawer-evidence-title">선택 근거</div>
+                <ul className="drawer-evidence-list">
+                  {selectReasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* Exclude reasons */}
+            {excludeReasons.length > 0 && (
+              <div className="drawer-evidence-block exclude-evidence">
+                <div className="drawer-evidence-title">주의 사항</div>
+                <ul className="drawer-evidence-list">
+                  {excludeReasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
               </div>
             )}
           </div>
 
-          {/* Tier 2: 현재 문제 (not shown for pipeline tabs) */}
-          {issues.length > 0 && activeQueue !== 'synced' && (
-            <div className="quick-detail-section">
-              <div className="quick-detail-section-title">
-                <span className="quick-detail-icon">{'\u26A0\uFE0F'}</span>
-                현재 문제
-              </div>
-              <ul className="quick-detail-issues">
-                {issues.map((issue, i) => (
-                  <li key={i}>{issue}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Tier 3: 연락 정보 */}
+          {/* ── Tier 3: 영향력 ── */}
           <div className="quick-detail-section">
             <div className="quick-detail-section-title">
-              <span className="quick-detail-icon">{'\u2709\uFE0F'}</span>
-              연락 정보
+              <span className="quick-detail-icon">{'\uD83D\uDCCA'}</span>
+              영향력
             </div>
             <div className="quick-detail-field">
-              <span className="quick-detail-label">이메일</span>
-              <span className="quick-detail-value">{lead.contact_email || lead.email || '(없음)'}</span>
-            </div>
-            <div className="quick-detail-field">
-              <span className="quick-detail-label">상태</span>
-              <span className={`contact-readiness-badge ${lead.contact_readiness}`}>
-                {CONTACT_READINESS_LABELS[lead.contact_readiness] || lead.contact_readiness}
-              </span>
-            </div>
-            {lead.channel_url && (
-              <div className="quick-detail-field">
-                <span className="quick-detail-label">채널</span>
-                <a href={lead.channel_url} target="_blank" rel="noopener noreferrer" className="quick-detail-link">
-                  {lead.channel_url.length > 40 ? lead.channel_url.slice(0, 40) + '...' : lead.channel_url}
-                  {' \u2197'}
-                </a>
-              </div>
-            )}
-            <div className="quick-detail-field">
-              <span className="quick-detail-label">영향력</span>
+              <span className="quick-detail-label">규모</span>
               <span className="quick-detail-value">
                 {lead.audience_display_status === 'collected' ? (
                   <>
@@ -301,12 +367,98 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
                       </span>
                     )}
                   </>
-                ) : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                ) : (
+                  <span className={`audience-status ${lead.audience_display_status}`}>
+                    {lead.audience_failure_reason
+                      ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason)
+                      : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                  </span>
+                )}
               </span>
             </div>
+            {lead.enrichment_status !== 'not_started' && (
+              <div className="quick-detail-field">
+                <span className="quick-detail-label">보강 상태</span>
+                <span className="quick-detail-value">
+                  {ENRICHMENT_STATUS_LABELS[lead.enrichment_status]}
+                  {lead.enrichment?.enrichment_confidence != null && (
+                    <span className="text-muted"> ({Math.round(lead.enrichment.enrichment_confidence * 100)}%)</span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Tier 4: Actions (context-dependent) */}
+          {/* ── Tier 4: 소스 & 발견 ── */}
+          <div className="quick-detail-section">
+            <div className="quick-detail-section-title">
+              <span className="quick-detail-icon">{'\uD83D\uDD0D'}</span>
+              소스
+            </div>
+            {lead.discovery_keyword && (
+              <div className="quick-detail-field">
+                <span className="quick-detail-label">발견 키워드</span>
+                <span className="quick-detail-value">{lead.discovery_keyword}</span>
+              </div>
+            )}
+            {lead.normalized_tags.length > 0 && (
+              <div className="quick-detail-field">
+                <span className="quick-detail-label">카테고리</span>
+                <span className="tag-chips">
+                  {lead.normalized_tags.map(tag => (
+                    <span key={tag} className="tag-chip">{tag}</span>
+                  ))}
+                </span>
+              </div>
+            )}
+            <div className="quick-detail-field">
+              <span className="quick-detail-label">신뢰도</span>
+              <span className="quick-detail-value">{Math.round(lead.confidence_score * 100)}%</span>
+            </div>
+            {lead.source_type && (
+              <div className="quick-detail-field">
+                <span className="quick-detail-label">소스 유형</span>
+                <span className="quick-detail-value">{SOURCE_TYPE_LABELS[lead.source_type] || lead.source_type}</span>
+              </div>
+            )}
+            {lead.evidence_link && (
+              <div className="quick-detail-field">
+                <span className="quick-detail-label">증거</span>
+                <a href={lead.evidence_link} target="_blank" rel="noopener noreferrer" className="quick-detail-link">
+                  {lead.evidence_link.length > 40 ? lead.evidence_link.slice(0, 40) + '...' : lead.evidence_link}
+                  {' \u2197'}
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* ── Tier 5: 보강 요약 (if enrichment exists) ── */}
+          {lead.enrichment && lead.enrichment_status === 'completed' && (
+            <div className="quick-detail-section">
+              <div className="quick-detail-section-title">
+                <span className="quick-detail-icon">{'\uD83D\uDCDD'}</span>
+                프로필 보강
+              </div>
+              {lead.enrichment.business_summary && (
+                <div className="quick-detail-field">
+                  <span className="quick-detail-label">비즈니스</span>
+                  <span className="quick-detail-value drawer-summary-text">{lead.enrichment.business_summary}</span>
+                </div>
+              )}
+              {lead.enrichment.profile_tags.length > 0 && (
+                <div className="quick-detail-field">
+                  <span className="quick-detail-label">태그</span>
+                  <span className="tag-chips">
+                    {lead.enrichment.profile_tags.slice(0, 5).map(tag => (
+                      <span key={tag} className="tag-chip">{tag}</span>
+                    ))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Tier 6: Actions (context-dependent) ── */}
           {renderActions()}
 
           {/* Full Detail CTA */}
