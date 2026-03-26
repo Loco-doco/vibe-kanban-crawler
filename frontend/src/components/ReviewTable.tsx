@@ -83,14 +83,14 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
               <tr
                 key={lead.id}
                 className={`review-row${selectedIds.has(lead.id) ? ' selected' : ''}`}
-                onClick={() => onToggleSelect(lead.id)}
+                onClick={() => onViewDetail(lead)}
+                style={{ cursor: 'pointer' }}
               >
-                <td className="col-check">
+                <td className="col-check" onClick={e => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedIds.has(lead.id)}
                     onChange={() => onToggleSelect(lead.id)}
-                    onClick={e => e.stopPropagation()}
                   />
                 </td>
                 <td className="col-name">
