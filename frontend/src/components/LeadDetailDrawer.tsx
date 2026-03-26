@@ -432,31 +432,63 @@ export default function LeadDetailDrawer({ lead, activeQueue, onClose, onUpdated
             )}
           </div>
 
-          {/* ── Tier 5: 보강 요약 (if enrichment exists) ── */}
-          {lead.enrichment && lead.enrichment_status === 'completed' && (
-            <div className="quick-detail-section">
-              <div className="quick-detail-section-title">
-                <span className="quick-detail-icon">{'\uD83D\uDCDD'}</span>
-                프로필 보강
-              </div>
-              {lead.enrichment.business_summary && (
-                <div className="quick-detail-field">
-                  <span className="quick-detail-label">비즈니스</span>
-                  <span className="quick-detail-value drawer-summary-text">{lead.enrichment.business_summary}</span>
-                </div>
-              )}
-              {lead.enrichment.profile_tags.length > 0 && (
-                <div className="quick-detail-field">
-                  <span className="quick-detail-label">태그</span>
-                  <span className="tag-chips">
-                    {lead.enrichment.profile_tags.slice(0, 5).map(tag => (
-                      <span key={tag} className="tag-chip">{tag}</span>
-                    ))}
-                  </span>
-                </div>
-              )}
+          {/* ── Tier 5: 프로필 보강 정보 ── */}
+          <div className="quick-detail-section">
+            <div className="quick-detail-section-title">
+              <span className="quick-detail-icon">{'\uD83D\uDCCB'}</span>
+              프로필 보강
+              <span className={`enrichment-status-badge ${lead.enrichment_status}`}>
+                {ENRICHMENT_STATUS_LABELS[lead.enrichment_status] || lead.enrichment_status}
+              </span>
             </div>
-          )}
+            {lead.enrichment_status === 'not_started' && (
+              <div className="enrichment-empty">보강 대기 중 — 자동 실행 예정</div>
+            )}
+            {lead.enrichment && (
+              <>
+                {lead.enrichment.business_summary && (
+                  <div className="quick-detail-field">
+                    <span className="quick-detail-label">비즈니스</span>
+                    <span className="quick-detail-value enrichment-text">{lead.enrichment.business_summary}</span>
+                  </div>
+                )}
+                {lead.enrichment.profile_summary && (
+                  <div className="quick-detail-field">
+                    <span className="quick-detail-label">프로필</span>
+                    <span className="quick-detail-value enrichment-text">{lead.enrichment.profile_summary}</span>
+                  </div>
+                )}
+                {lead.enrichment.content_topics && lead.enrichment.content_topics.length > 0 && (
+                  <div className="quick-detail-field">
+                    <span className="quick-detail-label">주제</span>
+                    <span className="quick-detail-value">
+                      {lead.enrichment.content_topics.map((t, i) => (
+                        <span key={i} className="enrichment-tag">{t}</span>
+                      ))}
+                    </span>
+                  </div>
+                )}
+                {lead.enrichment.profile_tags && lead.enrichment.profile_tags.length > 0 && (
+                  <div className="quick-detail-field">
+                    <span className="quick-detail-label">태그</span>
+                    <span className="quick-detail-value">
+                      {lead.enrichment.profile_tags.map((t, i) => (
+                        <span key={i} className="enrichment-tag">{t}</span>
+                      ))}
+                    </span>
+                  </div>
+                )}
+                {lead.enrichment.enrichment_confidence != null && (
+                  <div className="quick-detail-field">
+                    <span className="quick-detail-label">신뢰도</span>
+                    <span className="quick-detail-value">
+                      {Math.round(lead.enrichment.enrichment_confidence * 100)}%
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           {/* ── Tier 6: Actions (context-dependent) ── */}
           {renderActions()}
