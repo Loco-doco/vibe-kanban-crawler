@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateLead, approveAndQueue, resolveConflict, syncToMaster } from '../api/leads'
-import type { Lead, ContactReadiness } from '../types'
+import type { Lead } from '../types'
 import {
   PLATFORM_LABELS,
-  CONTACT_READINESS_LABELS,
   SUSPECT_REASON_LABELS,
   AUDIENCE_TIER_LABELS,
   AUDIENCE_DISPLAY_STATUS_LABELS,
