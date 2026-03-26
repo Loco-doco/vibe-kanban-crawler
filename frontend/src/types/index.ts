@@ -269,6 +269,9 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
   search_result: '검색결과',
   external_site: '외부사이트',
   contact_page: '연락처',
+  social_profile: '소셜 프로필',
+  domain_guess: '도메인 추측',
+  bio_link: '바이오 링크',
 }
 
 export const REVIEW_STATUS_LABELS: Record<string, string> = {
