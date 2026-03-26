@@ -3,42 +3,94 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createJob, parsePrompt, type ParsedPrompt } from '../api/jobs'
 import {
   SUGGESTED_CATEGORIES,
+  PLATFORM_OPTIONS,
   PARSE_CONFIDENCE_LABELS,
   CONFIDENCE_SIGNAL_LABELS,
-  type ParseConfidenceLevel,
 } from '../types'
+import type { CreateJobPayload, ParseConfidenceLevel } from '../types'
 
 interface Props {
   onCreated?: () => void
 }
 
 const EFFORT_LEVELS = [
-  {
-    value: 1,
-    label: '빠른 탐색',
-    desc: 'YouTube 채널 정보만 확인. 빠르지만 이메일 확보율 낮음.',
-    estimate: '약 2~5분',
-  },
-  {
-    value: 2,
-    label: '표준 탐색',
-    desc: 'YouTube + 웹 검색으로 이메일 탐색. 대부분 추천.',
-    estimate: '약 5~10분',
-  },
-  {
-    value: 3,
-    label: '심층 탐색',
-    desc: 'YouTube + 웹 + 외부 사이트 전부 탐색. 시간 길지만 확보율 최고.',
-    estimate: '약 10~20분',
-  },
+  { value: 1, label: '빠른 탐색', desc: 'YouTube 채널 정보만 확인. 빠르지만 이메일 확보율 낮음.', estimate: '약 2~5분' },
+  { value: 2, label: '표준 탐색', desc: 'YouTube + 웹 검색으로 이메일 탐색. 대부분 추천.', estimate: '약 5~10분' },
+  { value: 3, label: '심층 탐색', desc: 'YouTube + 웹 + 외부 사이트 전부 탐색. 시간 길지만 확보율 최고.', estimate: '약 10~20분' },
 ]
 
-const EXAMPLE_PROMPTS = [
-  '뷰티 유튜버 중에서 구독자 5만~50만 사이, 스킨케어 리뷰 위주로 찾아줘',
-  '요리 레시피 채널인데 구독자 1만 이상인 곳',
-  '자기계발, 독서 관련 유튜버',
-  '부동산 투자, 재테크 관련 크리에이터 중 소규모 채널',
-]
+interface SearchFormState {
+  target_persona: string
+  categories: string[]
+  primary_platform: string
+  search_clues: string[]
+  required_conditions: string
+  exclude_conditions: string
+  min_followers: string
+  max_followers: string
+  target_count: string
+  search_effort: number
+  label: string
+  max_retries: string
+  delay_ms: string
+}
+
+const defaultForm: SearchFormState = {
+  target_persona: '',
+  categories: [],
+  primary_platform: 'youtube',
+  search_clues: [],
+  required_conditions: '',
+  exclude_conditions: '',
+  min_followers: '',
+  max_followers: '',
+  target_count: '30',
+  search_effort: 2,
+  label: '',
+  max_retries: '3',
+  delay_ms: '2000',
+}
+
+function buildPayload(form: SearchFormState): CreateJobPayload {
+  let keywords = [...form.search_clues]
+  if (keywords.length === 0 && form.target_persona.trim()) {
+    keywords = [form.target_persona.trim()]
+  }
+  if (keywords.length === 0 && form.categories.length > 0) {
+    keywords = [...form.categories]
+  }
+
+  const extraParts: string[] = []
+  if (form.target_persona.trim()) extraParts.push(`대상: ${form.target_persona.trim()}`)
+  if (form.required_conditions.trim()) extraParts.push(`필수: ${form.required_conditions.trim()}`)
+  if (form.exclude_conditions.trim()) extraParts.push(`제외: ${form.exclude_conditions.trim()}`)
+
+  return {
+    job: {
+      label: form.label || undefined,
+      mode: 'discovery',
+      targets: ['discovery'],
+      keywords,
+      platform: form.primary_platform || 'youtube',
+      category_tags: form.categories.length > 0 ? form.categories : undefined,
+      target_count: Number(form.target_count) || 30,
+      subscriber_min: form.min_followers ? Number(form.min_followers) : undefined,
+      subscriber_max: form.max_followers ? Number(form.max_followers) : undefined,
+      extra_conditions: extraParts.length > 0 ? extraParts.join(' | ') : undefined,
+      max_retries: Number(form.max_retries) || 3,
+      delay_ms: Number(form.delay_ms) || 2000,
+      max_depth: form.search_effort,
+    },
+  }
+}
+
+function formatFollowers(val: string) {
+  const num = Number(val)
+  if (!num) return ''
+  if (num >= 10000) return `${(num / 10000).toFixed(num % 10000 === 0 ? 0 : 1)}만명`
+  if (num >= 1000) return `${(num / 1000).toFixed(num % 1000 === 0 ? 0 : 1)}천명`
+  return `${num}명`
+}
 
 const PARSE_ERROR_TIPS = [
   '구체적인 카테고리 키워드를 포함해주세요 (예: 뷰티, 요리, 운동)',
@@ -48,75 +100,55 @@ const PARSE_ERROR_TIPS = [
 ]
 
 export default function CollectionSetupForm({ onCreated }: Props) {
-  // Step management
-  const [step, setStep] = useState<'input' | 'parsing' | 'confirm'>('input')
-
-  // Input step
+  const [step, setStep] = useState<'form' | 'confirm'>('form')
   const [prompt, setPrompt] = useState('')
+  const [form, setForm] = useState<SearchFormState>(defaultForm)
+  const [parseError, setParseError] = useState('')
+  const [newClue, setNewClue] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isParsing, setIsParsing] = useState(false)
 
-  // Editable parsed fields (populated by parser, editable by user)
-  const [keywords, setKeywords] = useState<string[]>([])
-  const [categoryTags, setCategoryTags] = useState<string[]>([])
-  const [subscriberMin, setSubscriberMin] = useState('')
-  const [subscriberMax, setSubscriberMax] = useState('')
-  const [newKeyword, setNewKeyword] = useState('')
-  const [extraConditions, setExtraConditions] = useState<string | null>(null)
-
-  // Search Intent Parser Recovery fields
-  const [rawPrompt, setRawPrompt] = useState('')
-  const [platformHints, setPlatformHints] = useState<Record<string, boolean>>({})
-  const [semanticExpansions, setSemanticExpansions] = useState<Record<string, boolean>>({})
-
-  // Confidence tracking (B-5)
+  // B-5: Confidence tracking
   const [parseConfidence, setParseConfidence] = useState(0)
   const [confidenceLevel, setConfidenceLevel] = useState<ParseConfidenceLevel>('high')
   const [confidenceSignals, setConfidenceSignals] = useState<string[]>([])
   const [showComparison, setShowComparison] = useState(false)
-
-  // Settings
-  const [targetCount, setTargetCount] = useState('30')
-  const [searchEffort, setSearchEffort] = useState(2)
-  const [label, setLabel] = useState('')
-  const [showOptions, setShowOptions] = useState(false)
-  const [maxRetries, setMaxRetries] = useState('3')
-  const [delayMs, setDelayMs] = useState('2000')
-
-  // Error
-  const [parseError, setParseError] = useState('')
+  const [rawPrompt, setRawPrompt] = useState('')
 
   const queryClient = useQueryClient()
 
+  const updateForm = (partial: Partial<SearchFormState>) => setForm(prev => ({ ...prev, ...partial }))
+
+  // --- Mutations ---
   const parseMutation = useMutation({
     mutationFn: parsePrompt,
     onSuccess: (result: ParsedPrompt) => {
-      // Populate editable fields from AI result
-      setKeywords(result.keywords)
-      setCategoryTags(result.category_tags)
-      setSubscriberMin(result.subscriber_min ? String(result.subscriber_min) : '')
-      setSubscriberMax(result.subscriber_max ? String(result.subscriber_max) : '')
-      setExtraConditions(result.extra_conditions || null)
-      // Search Intent Parser Recovery fields
-      setRawPrompt(result.raw_prompt || '')
-      // Platform hints: default ON
-      const hints: Record<string, boolean> = {}
-      for (const h of result.platform_hints || []) hints[h] = true
-      setPlatformHints(hints)
-      // Semantic expansions: default OFF
-      const exps: Record<string, boolean> = {}
-      for (const e of result.semantic_expansions || []) exps[e] = false
-      setSemanticExpansions(exps)
-      // Confidence (B-5)
+      setForm(prev => ({
+        ...prev,
+        target_persona: result.target_persona || prev.target_persona,
+        search_clues: (result.search_clues || result.keywords || []).length > 0
+          ? (result.search_clues || result.keywords || [])
+          : prev.search_clues,
+        categories: (result.categories || result.category_tags || []).length > 0
+          ? (result.categories || result.category_tags || [])
+          : prev.categories,
+        primary_platform: (result.active_platforms || result.platform_hints || [])[0] || prev.primary_platform,
+        exclude_conditions: result.exclude_conditions || prev.exclude_conditions,
+        min_followers: result.subscriber_min ? String(result.subscriber_min) : prev.min_followers,
+        max_followers: result.subscriber_max ? String(result.subscriber_max) : prev.max_followers,
+      }))
+      // B-5: Confidence
       setParseConfidence(result.parse_confidence ?? 0)
       setConfidenceLevel(result.confidence_level ?? 'medium')
       setConfidenceSignals(result.confidence_signals ?? [])
-      // Auto-show comparison for low confidence
+      setRawPrompt(result.raw_prompt || prompt)
       setShowComparison(result.confidence_level === 'low')
       setParseError('')
-      setStep('confirm')
+      setIsParsing(false)
     },
     onError: (err: Error) => {
       setParseError(err.message)
-      setStep('input')
+      setIsParsing(false)
     },
   })
 
@@ -124,492 +156,337 @@ export default function CollectionSetupForm({ onCreated }: Props) {
     mutationFn: createJob,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      // Reset all
       setPrompt('')
-      setKeywords([])
-      setCategoryTags([])
-      setSubscriberMin('')
-      setSubscriberMax('')
-      setNewKeyword('')
-      setExtraConditions(null)
-      setRawPrompt('')
-      setPlatformHints({})
-      setSemanticExpansions({})
+      setForm(defaultForm)
       setParseConfidence(0)
       setConfidenceLevel('high')
       setConfidenceSignals([])
       setShowComparison(false)
-      setTargetCount('30')
-      setSearchEffort(2)
-      setLabel('')
-      setMaxRetries('3')
-      setDelayMs('2000')
-      setShowOptions(false)
-      setStep('input')
+      setRawPrompt('')
+      setStep('form')
       onCreated?.()
     },
   })
 
-  const handleAnalyze = (e: React.FormEvent) => {
-    e.preventDefault()
+  // --- Handlers ---
+  const handleAnalyze = () => {
     if (!prompt.trim()) return
+    setIsParsing(true)
     setParseError('')
-    setStep('parsing')
     parseMutation.mutate(prompt.trim())
   }
 
   const handleStartCrawl = () => {
-    if (keywords.length === 0) return
-
-    // Merge toggled-on semantic expansions into keywords
-    const activeExpansions = Object.entries(semanticExpansions)
-      .filter(([, on]) => on)
-      .map(([kw]) => kw)
-    const mergedKeywords = [...keywords, ...activeExpansions.filter(e => !keywords.includes(e))]
-
-    // Determine platform from active platform hints (first active, or default 'youtube')
-    const activePlatforms = Object.entries(platformHints)
-      .filter(([, on]) => on)
-      .map(([p]) => p)
-    const platform = activePlatforms.length > 0 ? activePlatforms[0] : 'youtube'
-
-    createMutation.mutate({
-      job: {
-        label: label || undefined,
-        mode: 'discovery',
-        targets: ['discovery'],
-        keywords: mergedKeywords,
-        platform,
-        category_tags: categoryTags.length > 0 ? categoryTags : undefined,
-        target_count: targetCount ? Number(targetCount) : 30,
-        subscriber_min: subscriberMin ? Number(subscriberMin) : undefined,
-        subscriber_max: subscriberMax ? Number(subscriberMax) : undefined,
-        extra_conditions: extraConditions || undefined,
-        max_retries: Number(maxRetries) || 3,
-        delay_ms: Number(delayMs) || 2000,
-        max_depth: searchEffort,
-      },
-    })
+    if (!canStart) return
+    createMutation.mutate(buildPayload(form))
   }
 
-  const handleBack = () => {
-    setStep('input')
-  }
-
-  // Keyword management
-  const removeKeyword = (index: number) => {
-    setKeywords(keywords.filter((_, i) => i !== index))
-  }
-
-  const addKeyword = () => {
-    const kw = newKeyword.trim()
-    if (kw && !keywords.includes(kw) && keywords.length < 5) {
-      setKeywords([...keywords, kw])
-      setNewKeyword('')
+  const addClue = () => {
+    const val = newClue.trim()
+    if (val && form.search_clues.length < 10 && !form.search_clues.includes(val)) {
+      updateForm({ search_clues: [...form.search_clues, val] })
+      setNewClue('')
     }
   }
 
-  const handleKeywordKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      addKeyword()
+  const removeClue = (index: number) => {
+    updateForm({ search_clues: form.search_clues.filter((_, i) => i !== index) })
+  }
+
+  const addCategory = (cat: string) => {
+    if (!form.categories.includes(cat)) {
+      updateForm({ categories: [...form.categories, cat] })
     }
   }
 
-  // Category toggle
-  const toggleCategory = (cat: string) => {
-    setCategoryTags(
-      categoryTags.includes(cat)
-        ? categoryTags.filter((c) => c !== cat)
-        : [...categoryTags, cat]
-    )
+  const removeCategory = (cat: string) => {
+    updateForm({ categories: form.categories.filter(c => c !== cat) })
   }
 
-  // Platform hint toggle
-  const togglePlatformHint = (platform: string) => {
-    setPlatformHints(prev => ({ ...prev, [platform]: !prev[platform] }))
-  }
-
-  // Semantic expansion toggle
-  const toggleExpansion = (expansion: string) => {
-    setSemanticExpansions(prev => ({ ...prev, [expansion]: !prev[expansion] }))
-  }
-
-  const PLATFORM_DISPLAY: Record<string, string> = {
-    youtube: '유튜브',
-    instagram: '인스타그램',
-    liveklass: '라이브클래스',
-    classu: '클래수',
-    class101: 'Class101',
-    taling: '탈잉',
-    classting: '클래스팅',
-  }
-
-  const formatSubscribers = (val: string) => {
-    const num = Number(val)
-    if (!num) return ''
-    if (num >= 10000) return `${(num / 10000).toFixed(num % 10000 === 0 ? 0 : 1)}만명`
-    if (num >= 1000) return `${(num / 1000).toFixed(num % 1000 === 0 ? 0 : 1)}천명`
-    return `${num}명`
-  }
-
-  const isProcessing = parseMutation.isPending || createMutation.isPending
-  const effortLabel = EFFORT_LEVELS.find((l) => l.value === searchEffort)
-  const isLowConfidence = confidenceLevel === 'low'
-
-  // Build parsed summary for comparison
+  // B-5: Build parsed summary for comparison
   const buildParsedSummary = () => {
     const parts: string[] = []
-    if (Object.entries(platformHints).some(([, on]) => on)) {
-      const platforms = Object.entries(platformHints)
-        .filter(([, on]) => on)
-        .map(([p]) => PLATFORM_DISPLAY[p] || p)
-      parts.push(`[플랫폼] ${platforms.join(', ')}`)
-    }
-    if (keywords.length > 0) parts.push(`[키워드] ${keywords.join(', ')}`)
-    if (categoryTags.length > 0) parts.push(`[카테고리] ${categoryTags.join(', ')}`)
-    if (subscriberMin || subscriberMax) {
-      const min = subscriberMin ? formatSubscribers(subscriberMin) : '제한 없음'
-      const max = subscriberMax ? formatSubscribers(subscriberMax) : '제한 없음'
+    if (form.primary_platform) parts.push(`[플랫폼] ${PLATFORM_OPTIONS.find(p => p.value === form.primary_platform)?.label || form.primary_platform}`)
+    if (form.search_clues.length > 0) parts.push(`[키워드] ${form.search_clues.join(', ')}`)
+    if (form.categories.length > 0) parts.push(`[카테고리] ${form.categories.join(', ')}`)
+    if (form.min_followers || form.max_followers) {
+      const min = form.min_followers ? formatFollowers(form.min_followers) : '제한 없음'
+      const max = form.max_followers ? formatFollowers(form.max_followers) : '제한 없음'
       parts.push(`[구독자] ${min} ~ ${max}`)
     }
+    if (form.target_persona) parts.push(`[대상] ${form.target_persona}`)
+    if (form.exclude_conditions) parts.push(`[제외] ${form.exclude_conditions}`)
     return parts.join('\n')
   }
 
-  // Validation
+  // --- Validation ---
+  const canStart = form.search_clues.length > 0 || form.target_persona.trim() !== '' || form.categories.length > 0
   const validationErrors: string[] = []
-  if (step === 'confirm') {
-    if (keywords.length === 0) validationErrors.push('최소 1개의 키워드가 필요합니다')
-    if (keywords.length > 5) validationErrors.push('키워드는 최대 5개까지 가능합니다')
-    if (subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax)) {
-      validationErrors.push('최소 구독자가 최대 구독자보다 클 수 없습니다')
-    }
-    if (targetCount && Number(targetCount) < 1) validationErrors.push('수집 목표는 1건 이상이어야 합니다')
-    if (!targetCount) validationErrors.push('수집 목표를 입력해주세요')
+  if (form.min_followers && form.max_followers && Number(form.min_followers) > Number(form.max_followers)) {
+    validationErrors.push('최소 팔로워가 최대 팔로워보다 클 수 없습니다')
   }
-  const hasErrors = validationErrors.length > 0
+  if (form.target_count && Number(form.target_count) < 1) {
+    validationErrors.push('수집 목표는 1건 이상이어야 합니다')
+  }
+
+  const isProcessing = parseMutation.isPending || createMutation.isPending
+  const effortLabel = EFFORT_LEVELS.find(l => l.value === form.search_effort)
+  const platformLabel = PLATFORM_OPTIONS.find(p => p.value === form.primary_platform)?.label || form.primary_platform
+  const suggestedCategories = SUGGESTED_CATEGORIES.filter(c => !form.categories.includes(c))
+  const isLowConfidence = confidenceLevel === 'low'
+  const hasParsed = confidenceSignals.length > 0
 
   return (
-    <form onSubmit={handleAnalyze} className="setup-form">
-      {/* Step 1: 프롬프트 입력 */}
-      <div className="setup-section">
-        <label className="setup-label">
-          어떤 크리에이터를 찾고 싶나요?
-          <textarea
-            className="setup-textarea"
-            value={prompt}
-            onChange={(e) => { setPrompt(e.target.value); if (step === 'confirm') setStep('input') }}
-            rows={3}
-            placeholder="예: 뷰티 유튜버 중에서 구독자 5만~50만 사이, 스킨케어 리뷰 위주로 찾아줘"
-            disabled={step === 'parsing'}
-          />
-        </label>
-        {step === 'input' && !prompt && (
-          <div className="prompt-examples">
-            {EXAMPLE_PROMPTS.map((ex, i) => (
-              <button key={i} type="button" className="prompt-example-chip" onClick={() => setPrompt(ex)}>
-                {ex}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="setup-form">
 
-      {/* AI 분석 버튼 (input 단계에서만) */}
-      {step !== 'confirm' && (
-        <button
-          type="submit"
-          className="btn btn-primary setup-submit"
-          disabled={isProcessing || !prompt.trim()}
-          style={{ marginBottom: 16 }}
-        >
-          {step === 'parsing' ? '분석 중...' : '검색 조건 분석'}
-        </button>
-      )}
-
-      {/* parse_failed: error message + retry guide (B-5 Task 4) */}
-      {step === 'input' && (parseError || parseMutation.isError) && (
-        <div className="parse-error-panel">
-          <div className="parse-error-header">
-            <span className="parse-error-icon">!</span>
-            <strong>분석에 실패했습니다</strong>
-          </div>
-          <p className="parse-error-message">
-            {parseError || (parseMutation.error as Error).message}
-          </p>
-          <div className="parse-error-tips">
-            <span className="parse-error-tips-title">다시 시도하려면:</span>
-            <ul className="parse-error-tips-list">
-              {PARSE_ERROR_TIPS.map((tip, i) => (
-                <li key={i}>{tip}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="parse-error-examples">
-            <span className="parse-error-tips-title">예시로 다시 시도:</span>
-            <div className="prompt-examples" style={{ marginTop: 6 }}>
-              {EXAMPLE_PROMPTS.slice(0, 2).map((ex, i) => (
-                <button key={i} type="button" className="prompt-example-chip" onClick={() => { setPrompt(ex); setParseError('') }}>
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: 편집 가능한 분석 결과 + 설정 */}
-      {step === 'confirm' && (
+      {/* ==================== STEP: FORM (자연어 + 구조화 필터 통합) ==================== */}
+      {step === 'form' && (
         <>
-          {/* 분석 결과 헤더 + 신뢰도 표시 (B-5 Task 1) */}
-          <div className="parsed-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h4 className="setup-section-title" style={{ margin: 0 }}>
-                검색 조건 분석 결과
-              </h4>
-              <span className={`confidence-badge confidence-${confidenceLevel}`}>
-                {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
-                <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
-              </span>
-            </div>
-            <button type="button" className="btn-text" onClick={handleBack}>
-              다시 입력
-            </button>
-          </div>
-
-          {/* 신뢰도 시그널 상세 (B-5 Task 1) */}
-          {confidenceSignals.length > 0 && (
-            <div className="confidence-signals">
-              {['keywords_extracted', 'keywords_rich', 'category_detected', 'subscriber_range_detected', 'platform_detected', 'prompt_detailed'].map(sig => (
-                <span
-                  key={sig}
-                  className={`confidence-signal${confidenceSignals.includes(sig) ? ' active' : ''}`}
-                >
-                  {confidenceSignals.includes(sig) ? '\u2713' : '\u2717'} {CONFIDENCE_SIGNAL_LABELS[sig] || sig}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Low confidence 경고 배너 (B-5 Task 3) */}
-          {isLowConfidence && (
-            <div className="low-confidence-banner">
-              <div className="low-confidence-header">
-                <strong>분석 신뢰도가 낮습니다</strong>
-              </div>
-              <p className="low-confidence-desc">
-                입력한 내용에서 충분한 검색 조건을 추출하지 못했습니다.
-                아래 필드를 직접 수정하거나, 더 구체적인 프롬프트로 다시 시도해주세요.
-              </p>
-              <div className="low-confidence-actions">
-                <button type="button" className="btn btn-small btn-outline" onClick={handleBack}>
-                  프롬프트 다시 작성
-                </button>
-                <span className="low-confidence-or">또는 아래에서 직접 수정</span>
-              </div>
-            </div>
-          )}
-
-          {/* 원문 vs 파싱 결과 비교 UI (B-5 Task 2) */}
-          <div className="setup-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span className="setup-label-inline" style={{ marginBottom: 0 }}>원문</span>
+          {/* 자연어 입력 (선택) */}
+          <div className="search-field-group">
+            <label className="setup-label">
+              자연어로 설명 <span className="setup-hint">(선택 — 아래 필터만으로도 시작 가능)</span>
+              <textarea
+                className="setup-textarea"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={2}
+                placeholder="예: 뷰티 유튜버 중에서 구독자 5만~50만 사이, 스킨케어 리뷰 위주로 찾아줘"
+                disabled={isParsing}
+              />
+            </label>
+            {prompt.trim() && (
               <button
                 type="button"
-                className="btn-text"
-                onClick={() => setShowComparison(!showComparison)}
-                style={{ fontSize: '0.75rem' }}
+                className="btn btn-sm btn-secondary"
+                onClick={handleAnalyze}
+                disabled={isParsing}
+                style={{ marginTop: 4 }}
               >
-                {showComparison ? '비교 닫기' : '파싱 결과 비교'}
+                {isParsing ? '해석 중...' : '자동 채우기'}
               </button>
-            </div>
-            {showComparison ? (
-              <div className="parse-comparison">
-                <div className="parse-comparison-col">
-                  <span className="parse-comparison-label">입력 원문</span>
-                  <div className="raw-prompt-box">{rawPrompt}</div>
-                </div>
-                <div className="parse-comparison-arrow">{'\u2192'}</div>
-                <div className="parse-comparison-col">
-                  <span className="parse-comparison-label">추출된 조건</span>
-                  <div className="parsed-prompt-box">{buildParsedSummary() || '(추출된 조건 없음)'}</div>
-                </div>
-              </div>
-            ) : (
-              <div className="raw-prompt-box">{rawPrompt}</div>
             )}
           </div>
 
-          {/* 감지된 플랫폼 힌트 (toggleable, default ON) */}
-          {Object.keys(platformHints).length > 0 && (
-            <div className="setup-section">
-              <span className="setup-label-inline">감지된 플랫폼 <span className="setup-hint">(클릭하여 ON/OFF)</span></span>
-              <div className="editable-chips">
-                {Object.entries(platformHints).map(([platform, active]) => (
-                  <button
-                    key={platform}
-                    type="button"
-                    className={`category-chip toggle-chip${active ? ' active' : ''}`}
-                    onClick={() => togglePlatformHint(platform)}
-                  >
-                    {PLATFORM_DISPLAY[platform] || platform}
-                    <span className="chip-toggle-indicator">{active ? 'ON' : 'OFF'}</span>
-                  </button>
-                ))}
+          {/* B-5: Parse error panel with retry guide */}
+          {parseError && (
+            <div className="parse-error-panel">
+              <div className="parse-error-header">
+                <span className="parse-error-icon">!</span>
+                <strong>분석에 실패했습니다</strong>
+              </div>
+              <p className="parse-error-message">{parseError}</p>
+              <div className="parse-error-tips">
+                <span className="parse-error-tips-title">다시 시도하려면:</span>
+                <ul className="parse-error-tips-list">
+                  {PARSE_ERROR_TIPS.map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}
 
-          {/* 편집 가능: 검색 키워드 */}
-          <div className={`setup-section${isLowConfidence && keywords.length === 0 ? ' field-attention' : ''}`}>
+          {/* B-5: Confidence badge + signals (shown after successful parse) */}
+          {hasParsed && !parseError && (
+            <div className="setup-section" style={{ paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span className={`confidence-badge confidence-${confidenceLevel}`}>
+                  {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
+                  <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-text"
+                  onClick={() => setShowComparison(!showComparison)}
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  {showComparison ? '비교 닫기' : '파싱 결과 비교'}
+                </button>
+              </div>
+              <div className="confidence-signals">
+                {['keywords_extracted', 'keywords_rich', 'category_detected', 'subscriber_range_detected', 'platform_detected', 'prompt_detailed'].map(sig => (
+                  <span
+                    key={sig}
+                    className={`confidence-signal${confidenceSignals.includes(sig) ? ' active' : ''}`}
+                  >
+                    {confidenceSignals.includes(sig) ? '\u2713' : '\u2717'} {CONFIDENCE_SIGNAL_LABELS[sig] || sig}
+                  </span>
+                ))}
+              </div>
+
+              {/* B-5: Parse comparison (raw vs parsed) */}
+              {showComparison && (
+                <div className="parse-comparison" style={{ marginTop: 8 }}>
+                  <div className="parse-comparison-col">
+                    <span className="parse-comparison-label">입력 원문</span>
+                    <div className="raw-prompt-box">{rawPrompt}</div>
+                  </div>
+                  <div className="parse-comparison-arrow">{'\u2192'}</div>
+                  <div className="parse-comparison-col">
+                    <span className="parse-comparison-label">추출된 조건</span>
+                    <div className="parsed-prompt-box">{buildParsedSummary() || '(추출된 조건 없음)'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* B-5: Low confidence banner */}
+              {isLowConfidence && (
+                <div className="low-confidence-banner" style={{ marginTop: 10 }}>
+                  <div className="low-confidence-header">
+                    <strong>분석 신뢰도가 낮습니다</strong>
+                  </div>
+                  <p className="low-confidence-desc">
+                    입력한 내용에서 충분한 검색 조건을 추출하지 못했습니다.
+                    아래 필드를 직접 수정하거나, 더 구체적인 프롬프트로 다시 시도해주세요.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="search-form-divider">
+            <span>탐색 조건</span>
+          </div>
+
+          {/* 검색 단서 */}
+          <div className={`search-field-group${isLowConfidence && form.search_clues.length === 0 ? ' field-attention' : ''}`}>
             <span className="setup-label-inline">
               검색 키워드
-              {isLowConfidence && keywords.length === 0 && (
+              {isLowConfidence && form.search_clues.length === 0 && (
                 <span className="field-attention-hint"> &mdash; 직접 추가해주세요</span>
               )}
             </span>
-            <div className="editable-chips">
-              {keywords.map((kw, i) => (
-                <span key={i} className="category-chip active editable-chip">
-                  {kw}
-                  <button type="button" className="chip-remove" onClick={() => removeKeyword(i)} title="삭제">&times;</button>
-                </span>
-              ))}
-              {keywords.length < 5 && (
-                <div className="chip-add-wrap">
+            <div className="search-clue-list">
+              {form.search_clues.map((clue, i) => (
+                <div key={i} className="search-clue-item">
                   <input
                     type="text"
-                    className="chip-add-input"
-                    value={newKeyword}
-                    onChange={(e) => setNewKeyword(e.target.value)}
-                    onKeyDown={handleKeywordKeyDown}
-                    placeholder="+ 키워드 추가"
-                    autoFocus={isLowConfidence && keywords.length === 0}
+                    className="setup-input"
+                    value={clue}
+                    onChange={e => {
+                      const updated = [...form.search_clues]
+                      updated[i] = e.target.value
+                      updateForm({ search_clues: updated })
+                    }}
                   />
-                  {newKeyword.trim() && (
-                    <button type="button" className="chip-add-btn" onClick={addKeyword}>추가</button>
+                  <button type="button" className="btn-small btn-cancel" onClick={() => removeClue(i)}>삭제</button>
+                </div>
+              ))}
+              {form.search_clues.length < 10 && (
+                <div className="search-clue-item">
+                  <input
+                    type="text"
+                    className="setup-input"
+                    value={newClue}
+                    onChange={e => setNewClue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addClue() } }}
+                    placeholder="+ 키워드 추가 (Enter)"
+                    autoFocus={isLowConfidence && form.search_clues.length === 0}
+                  />
+                  {newClue.trim() && (
+                    <button type="button" className="btn-small btn-view-results" onClick={addClue}>추가</button>
                   )}
                 </div>
               )}
-              {keywords.length >= 5 && (
-                <span className="setup-help" style={{ alignSelf: 'center' }}>최대 5개</span>
-              )}
             </div>
-            {keywords.length === 0 && (
-              <span className="setup-error" style={{ marginTop: 4 }}>최소 1개의 키워드가 필요합니다</span>
-            )}
           </div>
 
-          {/* 편집 가능: 카테고리 */}
-          <div className={`setup-section${isLowConfidence && categoryTags.length === 0 ? ' field-attention' : ''}`}>
+          {/* 카테고리 */}
+          <div className={`search-field-group${isLowConfidence && form.categories.length === 0 ? ' field-attention' : ''}`}>
             <span className="setup-label-inline">
-              카테고리 태그 <span className="setup-hint">(선택)</span>
-              {isLowConfidence && categoryTags.length === 0 && (
+              카테고리 / 니치
+              {isLowConfidence && form.categories.length === 0 && (
                 <span className="field-attention-hint"> &mdash; 카테고리를 선택하면 정확도가 높아집니다</span>
               )}
             </span>
-            <div className="category-selector">
-              {SUGGESTED_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`category-chip${categoryTags.includes(cat) ? ' active' : ''}`}
-                  onClick={() => toggleCategory(cat)}
-                >
+            {form.categories.length > 0 && (
+              <div className="category-selected-tags">
+                {form.categories.map(cat => (
+                  <span key={cat} className="category-chip active">
+                    {cat}
+                    <button type="button" className="chip-remove" onClick={() => removeCategory(cat)}>&times;</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="category-suggestions">
+              {suggestedCategories.map(cat => (
+                <button key={cat} type="button" className="category-chip" onClick={() => addCategory(cat)}>
                   {cat}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 연관 키워드 제안 (toggleable, default OFF) */}
-          {Object.keys(semanticExpansions).length > 0 && (
-            <div className="setup-section">
-              <span className="setup-label-inline">연관 키워드 제안 <span className="setup-hint">(OFF 기본, 클릭하여 추가)</span></span>
-              <div className="editable-chips">
-                {Object.entries(semanticExpansions).map(([expansion, active]) => (
-                  <button
-                    key={expansion}
-                    type="button"
-                    className={`category-chip toggle-chip${active ? ' active' : ''}`}
-                    onClick={() => toggleExpansion(expansion)}
-                  >
-                    {expansion}
-                    <span className="chip-toggle-indicator">{active ? 'ON' : 'OFF'}</span>
-                  </button>
-                ))}
-              </div>
+          {/* 플랫폼 + 팔로워 범위 + 수집 목표 (한 줄) */}
+          <div className="search-field-group">
+            <span className="setup-label-inline">플랫폼</span>
+            <div className="platform-selector">
+              {PLATFORM_OPTIONS.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  className={`category-chip${form.primary_platform === p.value ? ' active' : ''}`}
+                  onClick={() => updateForm({ primary_platform: p.value })}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
-          {/* AI가 추출한 비즈니스 조건 (검색 키워드에 반영 불가능한 조건) */}
-          {extraConditions && (
-            <div className="setup-section">
-              <span className="setup-label-inline">리뷰 참고 조건</span>
-              <div className="extra-conditions-box">
-                <p className="extra-conditions-text">{extraConditions}</p>
-                <span className="extra-conditions-hint">
-                  이 조건은 검색 키워드에 직접 반영되지 않습니다. 수집 후 리드를 리뷰할 때 참고 기준으로 활용됩니다.
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* 편집 가능: 구독자 범위 + 수집 목표 */}
-          <div className="setup-section">
+          <div className="search-field-group">
             <div className="setup-row-3">
               <label className="setup-label">
                 최소 구독자
                 <input
                   type="number"
-                  className={`setup-input${subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) ? ' input-error' : ''}`}
-                  value={subscriberMin}
-                  onChange={(e) => setSubscriberMin(e.target.value)}
+                  className={`setup-input${form.min_followers && form.max_followers && Number(form.min_followers) > Number(form.max_followers) ? ' input-error' : ''}`}
+                  value={form.min_followers}
+                  onChange={e => updateForm({ min_followers: e.target.value })}
                   placeholder="제한 없음"
                   min={0}
                 />
-                {subscriberMin && <span className="setup-help">{formatSubscribers(subscriberMin)}</span>}
+                {form.min_followers && <span className="setup-help">{formatFollowers(form.min_followers)}</span>}
               </label>
               <label className="setup-label">
                 최대 구독자
                 <input
                   type="number"
-                  className={`setup-input${subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) ? ' input-error' : ''}`}
-                  value={subscriberMax}
-                  onChange={(e) => setSubscriberMax(e.target.value)}
+                  className={`setup-input${form.min_followers && form.max_followers && Number(form.min_followers) > Number(form.max_followers) ? ' input-error' : ''}`}
+                  value={form.max_followers}
+                  onChange={e => updateForm({ max_followers: e.target.value })}
                   placeholder="제한 없음"
                   min={0}
                 />
-                {subscriberMax && <span className="setup-help">{formatSubscribers(subscriberMax)}</span>}
+                {form.max_followers && <span className="setup-help">{formatFollowers(form.max_followers)}</span>}
               </label>
               <label className="setup-label">
                 수집 목표
                 <input
                   type="number"
-                  className={`setup-input${!targetCount || Number(targetCount) < 1 ? ' input-error' : ''}`}
-                  value={targetCount}
-                  onChange={(e) => setTargetCount(e.target.value)}
+                  className="setup-input"
+                  value={form.target_count}
+                  onChange={e => updateForm({ target_count: e.target.value })}
                   placeholder="30"
                   min={1}
                 />
-                <span className="setup-help">이메일 보유 리드 기준</span>
+                <span className="setup-help">이메일 보유 기준</span>
               </label>
             </div>
-            {subscriberMin && subscriberMax && Number(subscriberMin) > Number(subscriberMax) && (
-              <span className="setup-error" style={{ marginTop: 4 }}>최소 구독자가 최대 구독자보다 클 수 없습니다</span>
-            )}
           </div>
 
           {/* 탐색 강도 */}
-          <div className="setup-section">
-            <h4 className="setup-section-title">탐색 강도</h4>
+          <div className="search-field-group">
+            <span className="setup-label-inline">탐색 강도</span>
             <div className="effort-selector">
-              {EFFORT_LEVELS.map((level) => (
+              {EFFORT_LEVELS.map(level => (
                 <button
                   key={level.value}
                   type="button"
-                  className={`effort-option${searchEffort === level.value ? ' active' : ''}`}
-                  onClick={() => setSearchEffort(level.value)}
+                  className={`effort-option${form.search_effort === level.value ? ' active' : ''}`}
+                  onClick={() => updateForm({ search_effort: level.value })}
                 >
                   <div className="effort-option-top">
                     <span className="effort-option-label">{level.label}</span>
@@ -621,149 +498,152 @@ export default function CollectionSetupForm({ onCreated }: Props) {
             </div>
           </div>
 
-          {/* 추가 옵션 */}
-          <button type="button" className="btn-toggle" onClick={() => setShowOptions(!showOptions)}>
-            <span className={`toggle-arrow${showOptions ? ' open' : ''}`}>{'\u25BC'}</span>
-            추가 옵션
+          {/* 고급 옵션 */}
+          <button type="button" className="btn-toggle" onClick={() => setShowAdvanced(!showAdvanced)}>
+            <span className={`toggle-arrow${showAdvanced ? ' open' : ''}`}>{'\u25BC'}</span>
+            고급 옵션
           </button>
 
-          {showOptions && (
+          {showAdvanced && (
             <div className="setup-section" style={{ marginTop: 8 }}>
-              <label className="setup-label">
-                탐색 이름 <span className="setup-hint">(선택)</span>
-                <input
-                  type="text"
-                  className="setup-input"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="예: 3월 뷰티 유튜버 탐색"
-                />
-              </label>
-              <div className="setup-row-2" style={{ marginTop: 12 }}>
+              <div className="search-field-group">
                 <label className="setup-label">
-                  재시도 횟수
-                  <input
-                    type="number"
-                    className="setup-input"
-                    value={maxRetries}
-                    onChange={(e) => setMaxRetries(e.target.value)}
-                    min={1}
-                    max={10}
-                  />
+                  대상 설명 <span className="setup-hint">(선택)</span>
+                  <input type="text" className="setup-input" value={form.target_persona} onChange={e => updateForm({ target_persona: e.target.value })} placeholder="예: 뷰티 유튜버, 스킨케어 리뷰 위주" />
                 </label>
+              </div>
+              <div className="search-field-group">
                 <label className="setup-label">
-                  요청 대기 시간
-                  <div className="input-with-unit">
-                    <input
-                      type="number"
-                      className="setup-input"
-                      value={Math.round(Number(delayMs) / 1000)}
-                      onChange={(e) => setDelayMs(String(Number(e.target.value) * 1000))}
-                      min={1}
-                      max={10}
-                    />
-                    <span className="input-unit">초</span>
-                  </div>
+                  필수 조건 <span className="setup-hint">(선택)</span>
+                  <input type="text" className="setup-input" value={form.required_conditions} onChange={e => updateForm({ required_conditions: e.target.value })} placeholder="예: 강의 판매 경험이 있는 사람" />
+                </label>
+              </div>
+              <div className="search-field-group">
+                <label className="setup-label">
+                  제외 조건 <span className="setup-hint">(선택)</span>
+                  <input type="text" className="setup-input" value={form.exclude_conditions} onChange={e => updateForm({ exclude_conditions: e.target.value })} placeholder="예: 정치, 종교" />
+                </label>
+              </div>
+              <div className="search-field-group">
+                <label className="setup-label">
+                  탐색 이름 <span className="setup-hint">(선택)</span>
+                  <input type="text" className="setup-input" value={form.label} onChange={e => updateForm({ label: e.target.value })} placeholder="예: 3월 뷰티 유튜버 탐색" />
                 </label>
               </div>
             </div>
           )}
 
-          {/* 탐색 요약 프리뷰 */}
-          <div className="crawl-preview">
-            <h4 className="crawl-preview-title">탐색 요약</h4>
-            <div className="crawl-preview-body">
-              <div className="crawl-preview-row">
-                <span className="crawl-preview-label">검색 키워드</span>
-                <span className="crawl-preview-value">
-                  {keywords.join(', ') || '-'}
-                  {Object.entries(semanticExpansions).some(([, on]) => on) && (
-                    <span className="crawl-preview-extra">
-                      {' + '}
-                      {Object.entries(semanticExpansions).filter(([, on]) => on).map(([kw]) => kw).join(', ')}
-                    </span>
-                  )}
-                </span>
-              </div>
-              {Object.keys(platformHints).length > 0 && (
-                <div className="crawl-preview-row">
-                  <span className="crawl-preview-label">플랫폼</span>
-                  <span className="crawl-preview-value">
-                    {Object.entries(platformHints)
-                      .filter(([, on]) => on)
-                      .map(([p]) => PLATFORM_DISPLAY[p] || p)
-                      .join(', ') || 'youtube'}
-                  </span>
-                </div>
-              )}
-              {categoryTags.length > 0 && (
-                <div className="crawl-preview-row">
-                  <span className="crawl-preview-label">카테고리</span>
-                  <span className="crawl-preview-value">{categoryTags.join(', ')}</span>
-                </div>
-              )}
-              <div className="crawl-preview-row">
-                <span className="crawl-preview-label">구독자 범위</span>
-                <span className="crawl-preview-value">
-                  {subscriberMin ? formatSubscribers(subscriberMin) : '제한 없음'}
-                  {' ~ '}
-                  {subscriberMax ? formatSubscribers(subscriberMax) : '제한 없음'}
-                </span>
-              </div>
-              <div className="crawl-preview-row">
-                <span className="crawl-preview-label">수집 목표</span>
-                <span className="crawl-preview-value">{targetCount || 30}건 (이메일 보유 리드)</span>
-              </div>
-              <div className="crawl-preview-row">
-                <span className="crawl-preview-label">탐색 방식</span>
-                <span className="crawl-preview-value">{effortLabel?.label} ({effortLabel?.estimate})</span>
-              </div>
-              {extraConditions && (
-                <div className="crawl-preview-row">
-                  <span className="crawl-preview-label">리뷰 참고 조건</span>
-                  <span className="crawl-preview-value">{extraConditions}</span>
-                </div>
-              )}
-              {label && (
-                <div className="crawl-preview-row">
-                  <span className="crawl-preview-label">탐색 이름</span>
-                  <span className="crawl-preview-value">{label}</span>
-                </div>
-              )}
-            </div>
-            <p className="crawl-preview-note">
-              위 조건으로 YouTube에서 크리에이터를 검색하고, 이메일을 수집합니다.
-              목표 수량 달성 또는 모든 소스 탐색 시 자동 종료됩니다.
-            </p>
-          </div>
-
-          {/* Validation errors */}
-          {hasErrors && (
+          {/* Validation */}
+          {validationErrors.length > 0 && (
             <div className="validation-errors">
-              {validationErrors.map((err, i) => (
-                <span key={i} className="setup-error">{err}</span>
-              ))}
+              {validationErrors.map((err, i) => <span key={i} className="setup-error">{err}</span>)}
             </div>
           )}
 
-          {/* 탐색 시작 버튼 */}
-          <button
-            type="button"
-            className="btn btn-primary setup-submit"
-            disabled={isProcessing || hasErrors}
-            onClick={handleStartCrawl}
-          >
-            {createMutation.isPending ? '탐색 생성 중...' : '크리에이터 탐색 시작'}
-          </button>
+          {/* CTA */}
+          <div className="search-step-actions" style={{ marginTop: 16 }}>
+            {canStart ? (
+              <button type="button" className="btn btn-primary setup-submit" onClick={() => setStep('confirm')}>
+                탐색 조건 확인
+              </button>
+            ) : (
+              <p className="setup-hint" style={{ margin: 0 }}>검색 키워드, 카테고리, 또는 대상 설명 중 최소 1개를 입력하세요</p>
+            )}
+          </div>
         </>
       )}
 
-      {/* Create job errors (not parse errors — those are handled above) */}
+      {/* ==================== STEP: CONFIRM ==================== */}
+      {step === 'confirm' && (
+        <>
+          <div className="parsed-header">
+            <h4 className="setup-section-title" style={{ margin: 0 }}>탐색 요약</h4>
+            {/* B-5: Show confidence in confirm step too */}
+            {hasParsed && (
+              <span className={`confidence-badge confidence-${confidenceLevel}`}>
+                {PARSE_CONFIDENCE_LABELS[confidenceLevel]}
+                <span className="confidence-score">{Math.round(parseConfidence * 100)}%</span>
+              </span>
+            )}
+          </div>
+
+          <div className="search-summary-card">
+            {form.target_persona && (
+              <div className="crawl-preview-row">
+                <span className="crawl-preview-label">대상</span>
+                <span className="crawl-preview-value">{form.target_persona}</span>
+              </div>
+            )}
+            <div className="crawl-preview-row">
+              <span className="crawl-preview-label">검색 키워드</span>
+              <span className="crawl-preview-value">{form.search_clues.length > 0 ? form.search_clues.join(', ') : '-'}</span>
+            </div>
+            {form.categories.length > 0 && (
+              <div className="crawl-preview-row">
+                <span className="crawl-preview-label">카테고리</span>
+                <span className="crawl-preview-value">{form.categories.join(', ')}</span>
+              </div>
+            )}
+            <div className="crawl-preview-row">
+              <span className="crawl-preview-label">플랫폼</span>
+              <span className="crawl-preview-value">{platformLabel}</span>
+            </div>
+            <div className="crawl-preview-row">
+              <span className="crawl-preview-label">구독자 범위</span>
+              <span className="crawl-preview-value">
+                {form.min_followers ? formatFollowers(form.min_followers) : '제한 없음'}
+                {' ~ '}
+                {form.max_followers ? formatFollowers(form.max_followers) : '제한 없음'}
+              </span>
+            </div>
+            <div className="crawl-preview-row">
+              <span className="crawl-preview-label">수집 목표</span>
+              <span className="crawl-preview-value">{form.target_count || 30}건</span>
+            </div>
+            <div className="crawl-preview-row">
+              <span className="crawl-preview-label">탐색 강도</span>
+              <span className="crawl-preview-value">{effortLabel?.label} ({effortLabel?.estimate})</span>
+            </div>
+            {form.required_conditions && (
+              <div className="crawl-preview-row">
+                <span className="crawl-preview-label">필수 조건</span>
+                <span className="crawl-preview-value">{form.required_conditions}</span>
+              </div>
+            )}
+            {form.exclude_conditions && (
+              <div className="crawl-preview-row">
+                <span className="crawl-preview-label">제외 조건</span>
+                <span className="crawl-preview-value">{form.exclude_conditions}</span>
+              </div>
+            )}
+          </div>
+
+          <p className="crawl-preview-note">
+            위 조건으로 크리에이터를 검색하고 이메일을 수집합니다.
+          </p>
+
+          <div className="search-step-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setStep('form')}>
+              수정하기
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={isProcessing || !canStart || validationErrors.length > 0}
+              onClick={handleStartCrawl}
+            >
+              {createMutation.isPending ? '탐색 생성 중...' : '탐색 시작'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ==================== ERRORS ==================== */}
       {createMutation.isError && (
         <p className="setup-error">
           탐색 생성 실패: {(createMutation.error as Error).message}
         </p>
       )}
-    </form>
+    </div>
   )
 }

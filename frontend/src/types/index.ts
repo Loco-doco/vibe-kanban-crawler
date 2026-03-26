@@ -218,15 +218,27 @@ export interface AddToMasterListResult {
 export interface MasterListLead {
   id: number
   email: string | null
-  email_verified: boolean
   platform: string
   channel_name: string | null
   channel_url: string | null
   evidence_link: string
   subscriber_count: number | null
   status: string
+  review_status: ReviewStatus
+  master_sync_status: MasterSyncStatus
+  email_status: EmailStatus
+  contact_email: string | null
+  display_name: string | null
+  contact_readiness: ContactReadiness
+  audience_tier: AudienceTier | null
+  audience_tier_override: AudienceTier | null
+  audience_size_override: number | null
+  enrichment_status: EnrichmentStatus
+  priority_score: number
+  confidence_score: number
   notes: string | null
   job_id: number | null
+  synced_at: string
   inserted_at: string
 }
 
@@ -368,6 +380,14 @@ export const TERMINATION_SENTENCES: Record<string, string> = {
   system_error: '시스템 오류로 탐색이 중단되었습니다.',
   user_cancelled: '사용자가 탐색을 중단했습니다.',
 }
+
+export const PLATFORM_OPTIONS: { value: string; label: string }[] = [
+  { value: 'youtube', label: '유튜브' },
+  { value: 'instagram', label: '인스타그램' },
+  { value: 'class101', label: 'Class101' },
+  { value: 'liveklass', label: '라이브클래스' },
+  { value: 'taling', label: '탈잉' },
+]
 
 export const PARSE_CONFIDENCE_LABELS: Record<string, string> = {
   high: '분석 신뢰도 높음',

@@ -12,16 +12,28 @@ defmodule LeadResearcherWeb.MasterListController do
       %{
         id: lead.id,
         email: lead.email,
-        email_verified: lead.email_verified || false,
         platform: lead.platform,
         channel_name: lead.channel_name,
         channel_url: lead.channel_url,
         evidence_link: lead.evidence_link,
         subscriber_count: lead.subscriber_count,
         status: lead.status,
+        review_status: lead.review_status,
+        master_sync_status: lead.master_sync_status,
+        email_status: lead.email_status,
+        contact_email: lead.contact_email,
+        display_name: lead.display_name,
+        contact_readiness: lead.contact_readiness,
+        audience_tier: lead.audience_tier,
+        audience_tier_override: lead.audience_tier_override,
+        audience_size_override: lead.audience_size_override,
+        enrichment_status: lead.enrichment_status,
+        priority_score: lead.priority_score,
+        confidence_score: lead.confidence_score,
         notes: lead.notes || entry.notes,
         job_id: entry.job_id,
-        inserted_at: entry.inserted_at
+        synced_at: entry.inserted_at,
+        inserted_at: lead.inserted_at
       }
     end)
 

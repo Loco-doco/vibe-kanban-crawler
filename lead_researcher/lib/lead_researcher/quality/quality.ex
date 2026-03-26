@@ -17,7 +17,11 @@ defmodule LeadResearcher.Quality do
     enriched = Enum.count(leads, &(&1.enrichment_status == "completed"))
 
     # Contact readiness metrics (UX-1)
-    contactable = Enum.count(leads, &(&1.contact_readiness == "contactable"))
+    # contactable count must match the contactable queue filter: includes user_confirmed, excludes rejected
+    contactable = Enum.count(leads, fn l ->
+      l.contact_readiness in ["contactable", "user_confirmed"] and
+        l.review_status not in ["rejected", "auto_rejected"]
+    end)
     platform_suspect = Enum.count(leads, &(&1.contact_readiness == "platform_suspect"))
     no_email_leads = Enum.count(leads, &(&1.contact_readiness == "no_email"))
 
@@ -54,7 +58,8 @@ defmodule LeadResearcher.Quality do
       held_leads: Enum.count(leads, &(&1.review_status == "held")),
       needs_verification_leads: Enum.count(leads, &(&1.contact_readiness in ["platform_suspect", "needs_verification"])),
       needs_correction_leads: Enum.count(leads, fn l ->
-        l.review_status not in ["rejected", "auto_rejected"] and
+        l.contact_readiness not in ["contactable", "user_confirmed"] and
+          l.review_status not in ["rejected", "auto_rejected"] and
           ((not has_effective_audience?(l)) or l.enrichment_status in ["not_started", "failed"])
       end),
       excluded_leads: Enum.count(leads, &(&1.review_status in ["auto_rejected", "rejected"])),

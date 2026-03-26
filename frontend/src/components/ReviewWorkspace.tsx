@@ -1,7 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun } from '../api/jobs'
-import type { EnrichmentRun } from '../api/jobs'
+import { getJobs, enrichSubscribers, enrichChannels, getEnrichmentRun, getEnrichmentRuns } from '../api/jobs'
 import { getLeads, getQuality, bulkReview, approveAndQueue, bulkResolveConflicts, syncToMaster } from '../api/leads'
 import ReviewJobSidebar from './ReviewJobSidebar'
 import ReviewKPICards from './ReviewKPICards'
@@ -111,6 +110,37 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     enabled: activeJobId !== null,
   })
 
+  // Fetch enrichment runs for the active job to auto-detect running enrichment
+  const { data: enrichmentRuns } = useQuery({
+    queryKey: ['enrichment-runs', activeJobId],
+    queryFn: () => getEnrichmentRuns(activeJobId!),
+    enabled: activeJobId !== null,
+    refetchInterval: subscriberEnrichState === 'idle' && channelEnrichState === 'idle' ? 10000 : false,
+  })
+
+  // Auto-detect running enrichment runs (from auto post-processing)
+  useEffect(() => {
+    if (!enrichmentRuns) return
+
+    // Find the latest running subscriber run
+    if (subscriberEnrichState === 'idle') {
+      const runningSubRun = enrichmentRuns.find(r => r.run_type === 'subscribers' && r.status === 'running')
+      if (runningSubRun) {
+        setSubscriberRunId(runningSubRun.id)
+        setSubscriberEnrichState('running')
+      }
+    }
+
+    // Find the latest running channel run
+    if (channelEnrichState === 'idle') {
+      const runningChRun = enrichmentRuns.find(r => r.run_type === 'channels' && r.status === 'running')
+      if (runningChRun) {
+        setChannelRunId(runningChRun.id)
+        setChannelEnrichState('running')
+      }
+    }
+  }, [enrichmentRuns, subscriberEnrichState, channelEnrichState])
+
   // Enrichment run polling
   const { data: subscriberRun } = useQuery({
     queryKey: ['enrichment-run', subscriberRunId],
@@ -126,17 +156,19 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     refetchInterval: 3000,
   })
 
-  // Auto-complete enrichment states when runs finish
+  // Auto-complete enrichment states when runs finish → refresh leads + quality
   if (subscriberRun && subscriberRun.status !== 'running' && subscriberEnrichState === 'running') {
     setSubscriberEnrichState(subscriberRun.status === 'completed' ? 'done' : 'error')
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
+    queryClient.invalidateQueries({ queryKey: ['enrichment-runs'] })
   }
 
   if (channelRun && channelRun.status !== 'running' && channelEnrichState === 'running') {
     setChannelEnrichState(channelRun.status === 'completed' ? 'done' : 'error')
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['quality'] })
+    queryClient.invalidateQueries({ queryKey: ['enrichment-runs'] })
   }
 
   // Bulk review mutation (held/rejected)
@@ -300,6 +332,21 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
     }
   }, [selectedLeadIds, bulkMutation, approveMutation, syncMutation, resolveConflictsMutation])
 
+  // Inline per-row action (single lead, no confirmation)
+  const handleInlineAction = useCallback((leadId: number, action: string) => {
+    if (action === 'approved') {
+      approveMutation.mutate([leadId])
+    } else if (action === 'sync') {
+      syncMutation.mutate([leadId])
+    } else if (action === 'conflict_keep') {
+      resolveConflictsMutation.mutate({ ids: [leadId], resolution: 'keep' })
+    } else if (action === 'conflict_reject') {
+      resolveConflictsMutation.mutate({ ids: [leadId], resolution: 'reject' })
+    } else {
+      bulkMutation.mutate({ ids: [leadId], status: action as ReviewStatus })
+    }
+  }, [approveMutation, syncMutation, resolveConflictsMutation, bulkMutation])
+
   const handleViewDetail = useCallback((lead: Lead) => {
     setDrawerLeadId(lead.id)
   }, [])
@@ -407,43 +454,59 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
 
             {/* L1: Work Queue Tabs — primary queue, mutually exclusive */}
             <div className="review-queue-tabs">
-              {REVIEW_TABS.map(tab => (
-                <button
-                  key={tab.value}
-                  className={`queue-tab${activeQueue === tab.value ? ' active' : ''}`}
-                  onClick={() => handleQueueChange(tab.value)}
-                >
-                  {tab.label}
-                  {quality && (
-                    <span className="queue-tab-count">
-                      {tab.value === 'needs_verification' ? quality.needs_verification_leads
-                        : tab.value === 'contactable' ? quality.contactable_leads
-                        : tab.value === 'needs_correction' ? quality.needs_correction_leads
-                        : tab.value === 'held' ? quality.held_leads
-                        : tab.value === 'excluded' ? quality.excluded_leads
-                        : 0}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {REVIEW_TABS.map(tab => {
+                const count = quality
+                  ? tab.value === 'needs_verification' ? quality.needs_verification_leads
+                    : tab.value === 'contactable' ? quality.contactable_leads
+                    : tab.value === 'needs_correction' ? quality.needs_correction_leads
+                    : tab.value === 'held' ? quality.held_leads
+                    : tab.value === 'excluded' ? quality.excluded_leads
+                    : 0
+                  : 0
+                const urgency = count > 0
+                  ? (tab.value === 'needs_verification' || tab.value === 'needs_correction') ? 'urgent'
+                    : tab.value === 'contactable' ? 'positive'
+                    : ''
+                  : ''
+                return (
+                  <button
+                    key={tab.value}
+                    className={`queue-tab${activeQueue === tab.value ? ' active' : ''}`}
+                    onClick={() => handleQueueChange(tab.value)}
+                  >
+                    {tab.label}
+                    {quality && (
+                      <span className={`queue-tab-count${urgency ? ` badge-${urgency}` : ''}${count > 0 ? ' has-items' : ''}`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
               <span className="queue-tab-divider" />
-              {PIPELINE_TABS.map(tab => (
-                <button
-                  key={tab.value}
-                  className={`queue-tab pipeline-tab${activeQueue === tab.value ? ' active' : ''}`}
-                  onClick={() => handleQueueChange(tab.value)}
-                >
-                  {tab.label}
-                  {quality && (
-                    <span className="queue-tab-count">
-                      {tab.value === 'conflict_queue' ? quality.conflict_queue_leads
-                        : tab.value === 'ready_to_sync' ? quality.ready_to_sync_leads
-                        : tab.value === 'synced' ? quality.synced_leads
-                        : 0}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {PIPELINE_TABS.map(tab => {
+                const count = quality
+                  ? tab.value === 'conflict_queue' ? quality.conflict_queue_leads
+                    : tab.value === 'ready_to_sync' ? quality.ready_to_sync_leads
+                    : tab.value === 'synced' ? quality.synced_leads
+                    : 0
+                  : 0
+                const urgency = count > 0 && tab.value === 'conflict_queue' ? 'alert' : ''
+                return (
+                  <button
+                    key={tab.value}
+                    className={`queue-tab pipeline-tab${activeQueue === tab.value ? ' active' : ''}`}
+                    onClick={() => handleQueueChange(tab.value)}
+                  >
+                    {tab.label}
+                    {quality && (
+                      <span className={`queue-tab-count${urgency ? ` badge-${urgency}` : ''}${count > 0 ? ' has-items' : ''}`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
 
             {/* L2: Secondary Filter Bar */}
@@ -509,6 +572,35 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               onClearFilters={handleClearSecondaryFilters}
             />
 
+            {/* Queue-context CTA: Bulk enrichment for needs_correction */}
+            {activeQueue === 'needs_correction' && quality && quality.needs_correction_leads > 0 && (
+              <div className="queue-context-cta">
+                <span className="queue-context-cta-text">
+                  데이터 보정이 필요한 리드 <strong>{quality.needs_correction_leads}건</strong>
+                </span>
+                <div className="queue-context-cta-actions">
+                  {quality.audience_coverage_rate < 1.0 && (
+                    <button
+                      className="btn btn-sm queue-cta-btn enrich"
+                      onClick={handleEnrichSubscribers}
+                      disabled={subscriberEnrichState === 'running' || subscriberEnrichState === 'done'}
+                    >
+                      {subscriberEnrichState === 'running' ? '영향력 보정 중...' : subscriberEnrichState === 'done' ? '영향력 보정 완료' : '일괄 영향력 보정'}
+                    </button>
+                  )}
+                  {quality.enrichment_coverage_rate < 1.0 && (
+                    <button
+                      className="btn btn-sm queue-cta-btn enrich"
+                      onClick={handleEnrichChannels}
+                      disabled={channelEnrichState === 'running' || channelEnrichState === 'done'}
+                    >
+                      {channelEnrichState === 'running' ? '프로필 보강 중...' : channelEnrichState === 'done' ? '프로필 보강 완료' : '일괄 프로필 보강'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Bulk Actions */}
             <BulkActions
               selectedCount={selectedLeadIds.size}
@@ -535,9 +627,11 @@ export default function ReviewWorkspace({ initialJobId }: Props) {
               <ReviewTable
                 leads={leads}
                 selectedIds={selectedLeadIds}
+                activeQueue={activeQueue}
                 onToggleSelect={handleToggleSelect}
                 onToggleSelectAll={handleToggleSelectAll}
                 onViewDetail={handleViewDetail}
+                onInlineAction={handleInlineAction}
               />
             )}
           </>

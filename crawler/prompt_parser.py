@@ -4,7 +4,7 @@ Prompt Parser — extracts structured search parameters from natural language.
 
 Protocol:
   stdin:  {"prompt": "..."}
-  stdout: {"keywords": [...], "parse_mode": "rule_based", ...}
+  stdout: {"search_clues": [...], "parse_mode": "rule_based", ...}
 
 Rule-based parser only. No external AI API required.
 """
@@ -27,6 +27,11 @@ PLATFORM_NAMES = {
     "탈잉": "taling", "클래스팅": "classting",
 }
 
+PERSONA_MARKERS = [
+    "유튜버", "크리에이터", "블로거", "인플루언서", "채널", "스트리머",
+    "강사", "작가", "전문가",
+]
+
 SEMANTIC_EXPANSIONS = {
     "교육": ["온라인 클래스", "강의", "교육 콘텐츠", "학습", "교육 유튜버"],
     "뷰티": ["화장품 리뷰", "메이크업 튜토리얼", "스킨케어"],
@@ -38,8 +43,60 @@ SEMANTIC_EXPANSIONS = {
 }
 
 
+def extract_target_persona(text):
+    """Extract a persona description from the prompt text.
+    Looks for clauses containing persona markers and captures surrounding context."""
+    # Split by major delimiters
+    clauses = re.split(r"[,，.。\n]+", text)
+    persona_parts = []
+    for clause in clauses:
+        clause = clause.strip()
+        if not clause:
+            continue
+        # Check if clause contains a persona marker
+        for marker in PERSONA_MARKERS:
+            if marker in clause:
+                # Clean up the clause: remove subscriber range patterns, action verbs
+                cleaned = re.sub(r"구독자[^,，\n]*", "", clause)
+                cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?", "", cleaned)
+                cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:이상|이하|미만)", "", cleaned)
+                cleaned = re.sub(r"찾아줘|찾아주세요|알려줘|추천해줘|검색해줘|찾고\s*싶어", "", cleaned)
+                cleaned = cleaned.strip()
+                if cleaned and len(cleaned) >= 2:
+                    persona_parts.append(cleaned)
+                break
+    if persona_parts:
+        return ", ".join(persona_parts[:2])
+    return None
+
+
+def extract_exclude_conditions(text):
+    """Extract exclusion conditions from text. Returns (exclude_string, cleaned_text)."""
+    exclude_parts = []
+    cleaned_text = text
+
+    # Pattern: 제외, 빼고, 말고 followed by content
+    patterns = [
+        r"([^,，\n]*?)\s*(?:제외|빼고|말고)\s*",
+        r"(?:제외|빼고|말고)\s*[:：]?\s*([^,，\n]+)",
+    ]
+
+    for pattern in patterns:
+        for m in re.finditer(pattern, text):
+            part = m.group(1).strip() if m.group(1) else ""
+            if part and len(part) >= 1 and len(part) <= 30:
+                if part not in exclude_parts:
+                    exclude_parts.append(part)
+            # Remove the matched exclusion from text for keyword extraction
+            cleaned_text = cleaned_text.replace(m.group(0), " ")
+
+    if exclude_parts:
+        return ", ".join(exclude_parts), cleaned_text
+    return None, text
+
+
 def parse_prompt(prompt):
-    """Parse prompt using rule-based extraction — keywords, subscriber range, categories."""
+    """Parse prompt using rule-based extraction."""
     log(f"parse_prompt: starting (prompt length={len(prompt)})")
     text = prompt.strip()
     raw_prompt = text
@@ -99,8 +156,14 @@ def parse_prompt(prompt):
                 subscriber_max = s_max
             break
 
+    # --- Extract target persona ---
+    target_persona = extract_target_persona(text)
+
+    # --- Extract exclude conditions ---
+    exclude_conditions, text_after_exclude = extract_exclude_conditions(text)
+
     # --- Remove noise phrases and extract meaningful keywords ---
-    cleaned = re.sub(r"구독자\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:사이)?", "", text)
+    cleaned = re.sub(r"구독자\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:사이)?", "", text_after_exclude)
     cleaned = re.sub(r"구독자\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:이상|이하|미만)", "", cleaned)
     cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:~|에서|부터|-)\s*\d+[\d.]*\s*(?:만|십만|백만|천만|억)?\s*(?:명)?\s*(?:사이)?", "", cleaned)
     cleaned = re.sub(r"\d+[\d.]*\s*(?:만|십만|백만|천만|억)\s*(?:명)?\s*(?:이상|이하|미만)", "", cleaned)
@@ -125,7 +188,6 @@ def parse_prompt(prompt):
         "좀", "한번", "정도", "쯤", "약", "대략",
         "키워드",
     ]
-    # Also strip platform name aliases from keywords (they are captured as platform_hints)
     for alias in PLATFORM_NAMES:
         filler.append(alias)
     for word in filler:
@@ -201,7 +263,7 @@ def parse_prompt(prompt):
                 if exp not in semantic_expansions:
                     semantic_expansions.append(exp)
 
-    # --- Compute parse confidence score ---
+    # --- Compute parse confidence score (B-5) ---
     confidence_signals = []
     confidence = 0.0
 
@@ -240,20 +302,29 @@ def parse_prompt(prompt):
         confidence_level = "low"
 
     result = {
+        # V2 fields (new frontend)
+        "target_persona": target_persona,
+        "search_clues": unique_keywords[:5],
+        "categories": category_tags,
+        "active_platforms": platform_hints,
+        "exclude_conditions": exclude_conditions,
+        # Backward compat fields (Elixir wrapper + old frontend)
         "keywords": unique_keywords[:5],
         "category_tags": category_tags,
+        "platform_hints": platform_hints,
+        "extra_conditions": None,
+        "semantic_expansions": semantic_expansions,
+        # Shared fields
         "subscriber_min": subscriber_min,
         "subscriber_max": subscriber_max,
-        "extra_conditions": None,
         "parse_mode": "rule_based",
         "raw_prompt": raw_prompt,
-        "platform_hints": platform_hints,
-        "semantic_expansions": semantic_expansions,
+        # B-5: Confidence scoring
         "parse_confidence": round(confidence, 2),
         "confidence_level": confidence_level,
         "confidence_signals": confidence_signals,
     }
-    log(f"parse_prompt: OK — keywords={result['keywords']}, platform_hints={platform_hints}, confidence={confidence:.2f} ({confidence_level})")
+    log(f"parse_prompt: OK — search_clues={result['search_clues']}, persona={target_persona}, exclude={exclude_conditions}, confidence={confidence:.2f} ({confidence_level})")
     return result
 
 

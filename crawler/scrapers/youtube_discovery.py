@@ -115,9 +115,15 @@ class YouTubeDiscoveryScraper(BaseScraper):
                         }
 
             # Then use EmailFinder for deeper search
+            # EmailFinder visits the actual channel page and may extract subscriber_count
+            # even when the search result didn't have it (YouTube now returns handles instead)
+            pending_leads = []
             for lead in email_finder.find_emails(channel_title, channel_url, channel_id):
                 lead["channel_name"] = lead.get("channel_name") or channel_title
                 lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
+                # Pick up subscriber_count from channel page if search result didn't have it
+                if sub_count is None and lead.get("subscriber_count"):
+                    sub_count = lead["subscriber_count"]
                 # Ensure source metadata defaults
                 lead.setdefault("source_platform", "youtube")
                 lead.setdefault("source_type", "profile_page")
@@ -125,6 +131,24 @@ class YouTubeDiscoveryScraper(BaseScraper):
                 # Skip if we already found this email from description
                 if lead.get("email") and lead["email"].lower() in found_emails:
                     continue
+                pending_leads.append(lead)
+
+            # Always pick up subscriber_count from EmailFinder's channel page visit
+            if sub_count is None and email_finder.last_subscriber_count:
+                sub_count = email_finder.last_subscriber_count
+
+            # Post-filter: now that we have actual subscriber_count, apply range filter
+            if sub_count is not None:
+                if subscriber_min and sub_count < subscriber_min:
+                    _log(f"Skipping {channel_title}: {sub_count} < min {subscriber_min}")
+                    continue
+                if subscriber_max and sub_count > subscriber_max:
+                    _log(f"Skipping {channel_title}: {sub_count} > max {subscriber_max}")
+                    continue
+
+            # Update subscriber_count on all pending leads and emit
+            for lead in pending_leads:
+                lead["subscriber_count"] = lead.get("subscriber_count") or sub_count
                 found_any = True
                 yield lead
 
@@ -294,12 +318,22 @@ class YouTubeDiscoveryScraper(BaseScraper):
         if not title:
             return None
 
+        sub_count = parse_subscriber_text(sub_text)
+        if sub_text and sub_count is None:
+            # YouTube now sometimes returns the channel handle (e.g. @username) instead of subscriber count
+            if sub_text.startswith("@"):
+                _log(f"[audience] Got handle instead of subscriber count for {title}: '{sub_text}'")
+            else:
+                _log(f"[audience] Failed to parse subscriber text for {title}: '{sub_text}'")
+        elif not sub_text:
+            _log(f"[audience] No subscriber text found for {title}")
+
         return {
             "title": title,
             "channel_id": channel_id,
             "url": url,
             "subscriber_text": sub_text,
-            "subscriber_count": parse_subscriber_text(sub_text),
+            "subscriber_count": sub_count,
             "description": desc,
         }
 

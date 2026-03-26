@@ -319,14 +319,15 @@ defmodule LeadResearcher.Leads do
   end
 
   defp maybe_filter_action_queue(query, %{"action_queue" => "contactable"}) do
-    where(query, [l], l.contact_readiness == "contactable" and l.review_status not in ["rejected", "auto_rejected"])
+    where(query, [l], l.contact_readiness in ["contactable", "user_confirmed"] and l.review_status not in ["rejected", "auto_rejected"])
   end
 
   defp maybe_filter_action_queue(query, %{"action_queue" => "needs_correction"}) do
     where(
       query,
       [l],
-      l.review_status not in ["rejected", "auto_rejected"] and
+      l.contact_readiness not in ["contactable", "user_confirmed"] and
+        l.review_status not in ["rejected", "auto_rejected"] and
         ((l.platform in ["youtube", "instagram"] and is_nil(l.subscriber_count) and is_nil(l.audience_size_override)) or
            l.enrichment_status in ["not_started", "failed"])
     )

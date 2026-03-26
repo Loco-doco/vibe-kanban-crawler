@@ -6,8 +6,8 @@ searches across multiple sources to maximize email discovery rate.
 
 Effort levels:
   1 (빠른 탐색): YouTube about page only
-  2 (표준 탐색): YouTube about + external links + web search
-  3 (심층 탐색): All above + aggregator sites + creator website deep scan
+  2 (표준 탐색): YouTube about + external links + social link tracking + web search (Bing fallback)
+  3 (심층 탐색): All above + Naver blog deep scan + aggregator sites + creator website deep scan + domain guessing
 """
 import re
 import json
@@ -30,19 +30,25 @@ class EmailFinder:
 
     EFFORT_STRATEGIES = {
         1: ["youtube_about"],
-        2: ["youtube_about", "youtube_links", "web_search"],
-        3: ["youtube_about", "youtube_links", "web_search", "aggregators", "website_deep"],
+        2: ["youtube_about", "youtube_links", "social_profiles", "web_search"],
+        3: [
+            "youtube_about", "youtube_links", "social_profiles",
+            "web_search", "naver_blog_deep", "aggregators", "website_deep",
+        ],
     }
 
     def __init__(self, config):
         self.max_retries = config.get("max_retries", 3)
         self.delay_ms = config.get("delay_ms", 2000)
         self.effort = min(max(config.get("max_depth", 2), 1), 3)
+        # Set by find_emails — caller can read after iteration to get channel page subscriber count
+        self.last_subscriber_count = None
 
     def find_emails(self, channel_name, channel_url, channel_id=None):
         """
         Generator yielding email lead dicts from multiple sources.
         Deduplicates across sources automatically.
+        After iteration, self.last_subscriber_count contains the channel page's subscriber count.
         """
         strategies = self.EFFORT_STRATEGIES.get(self.effort, self.EFFORT_STRATEGIES[2])
         seen_emails = set()
@@ -53,6 +59,7 @@ class EmailFinder:
 
         # Extract subscriber_count from channel page HTML
         channel_subscriber_count = extract_subscriber_count(channel_html) if channel_html else None
+        self.last_subscriber_count = channel_subscriber_count
 
         ctx = {
             "about_html": channel_html,
@@ -104,27 +111,45 @@ class EmailFinder:
                     "source_url": ctx["about_url"],
                 }
 
-        # Strategy 2: Parse ytInitialData for channel description (most reliable)
+        # Strategy 2: Parse ytInitialData for channel description + business email
         found_from_description = False
         match = re.search(
             r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL
         )
         if match:
+            data_str = match.group(1)
             try:
-                data = json.loads(match.group(1))
+                data = json.loads(data_str)
 
-                # Extract channel description from metadata
+                # 2a: channelMetadataRenderer.description (classic)
                 description = (
                     data
                     .get("metadata", {})
                     .get("channelMetadataRenderer", {})
                     .get("description", "")
                 )
-                if description:
+
+                # 2b: Also try aboutChannelViewModel (newer YouTube structure)
+                # and signInForBusinessEmail / businessEmailLabel
+                about_texts = [description] if description else []
+
+                # Deep scan for any "description" or "aboutChannelViewModel" text
+                about_match = re.search(r'"aboutChannelViewModel"\s*:\s*\{(.*?)\}', data_str, re.DOTALL)
+                if about_match:
+                    about_texts.append(about_match.group(1))
+
+                # businessEmailRevealRenderer has email behind a click, but
+                # the email is sometimes in signInForBusinessEmail text
+                biz_match = re.search(r'"businessEmail(?:Label|Reveal).*?"text"\s*:\s*"([^"]+)"', data_str)
+                if biz_match:
+                    about_texts.append(biz_match.group(1))
+
+                all_text = " ".join(about_texts)
+                if all_text:
                     for email in set(
                         re.findall(
                             r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-                            description,
+                            all_text,
                         )
                     ):
                         if is_valid_email(email):
@@ -145,9 +170,7 @@ class EmailFinder:
                 pass
 
             # Strategy 3: Broad email scan across ytInitialData (fallback only)
-            # Only if structured description parsing found nothing
             if not found_from_description:
-                data_str = match.group(1)
                 for email in set(
                     re.findall(
                         r"(?<![a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
@@ -195,6 +218,202 @@ class EmailFinder:
                         "source_url": link,
                     }
 
+    # ── Strategy: Social Profile Scanning ──
+
+    # Social platforms where creators often put contact emails
+    _SOCIAL_EXTRACTORS = {
+        "instagram.com": "_extract_email_from_instagram",
+        "blog.naver.com": "_extract_email_from_naver_blog",
+        "naver.me": "_extract_email_from_naver_blog",
+        "x.com": "_extract_email_from_twitter",
+        "twitter.com": "_extract_email_from_twitter",
+        "linktr.ee": "_extract_email_from_linktree",
+        "lit.link": "_extract_email_from_linktree",
+        "lnk.to": "_extract_email_from_linktree",
+    }
+
+    def _search_social_profiles(self, channel_name, channel_url, ctx):
+        """Visit social profile links from YouTube channel and extract emails."""
+        html = ctx["about_html"]
+        if not html:
+            return
+
+        external_links = self._extract_youtube_external_links(html)
+        if not external_links:
+            return
+
+        visited = 0
+        for link in external_links:
+            if visited >= 3:  # Limit to 3 social profiles
+                break
+
+            domain = urlparse(link).netloc.lower()
+
+            # Check if this is a known social platform
+            extractor_name = None
+            for social_domain, method_name in self._SOCIAL_EXTRACTORS.items():
+                if social_domain in domain:
+                    extractor_name = method_name
+                    break
+
+            if not extractor_name:
+                # Also try generic extraction for unknown social/link pages
+                if any(d in domain for d in ['blog', 'notion.', 'carrd.co', 'bio.link', 'beacons.ai']):
+                    extractor_name = "_extract_email_generic"
+
+            if not extractor_name:
+                continue
+
+            visited += 1
+            _log(f"[social] Scanning {domain} for: {channel_name}")
+
+            extractor = getattr(self, extractor_name, self._extract_email_generic)
+            try:
+                for lead in extractor(link, channel_name, channel_url):
+                    yield lead
+            except Exception as e:
+                _log(f"[social] Error scanning {link}: {e}")
+
+            time.sleep(self.delay_ms / 1000 * 0.3)
+
+    def _extract_email_from_instagram(self, url, channel_name, channel_url):
+        """Extract email from Instagram profile page."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        # Instagram embeds profile data in shared_data or meta tags
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.7,
+                    "source": "instagram_profile",
+                    "source_platform": "instagram",
+                    "source_type": "social_profile",
+                    "source_url": url,
+                }
+
+    def _extract_email_from_naver_blog(self, url, channel_name, channel_url):
+        """Extract email from Naver blog profile/about page."""
+        # Naver blog profile URL patterns
+        profile_urls = [url]
+
+        # If it's a blog URL, also try prologue and profile popup
+        match = re.search(r'blog\.naver\.com/([^/?#]+)', url)
+        if match:
+            blog_id = match.group(1)
+            profile_urls.append(f"https://blog.naver.com/{blog_id}/prologue")
+            profile_urls.append(f"https://blog.naver.com/ProflView.naver?blogId={blog_id}")
+
+        for page_url in profile_urls:
+            html = fetch_with_retry(page_url, 1, self.delay_ms)
+            if not html:
+                continue
+
+            emails = set(re.findall(
+                r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+                html,
+            ))
+            for email in emails:
+                if is_valid_email(email):
+                    yield {
+                        "email": email,
+                        "channel_name": channel_name,
+                        "channel_url": channel_url,
+                        "evidence_link": page_url,
+                        "confidence_score": 0.7,
+                        "source": "naver_blog",
+                        "source_platform": "naver_blog",
+                        "source_type": "social_profile",
+                        "source_url": page_url,
+                    }
+
+    def _extract_email_from_twitter(self, url, channel_name, channel_url):
+        """Extract email from Twitter/X profile — limited since most is JS-rendered."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        # Twitter bio is sometimes in meta tags
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.6,
+                    "source": "twitter_profile",
+                    "source_platform": "twitter",
+                    "source_type": "social_profile",
+                    "source_url": url,
+                }
+
+    def _extract_email_from_linktree(self, url, channel_name, channel_url):
+        """Extract email from Linktree, lit.link, and similar bio link pages."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        # Also check for mailto: links
+        emails |= set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html))
+
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.75,
+                    "source": "linktree",
+                    "source_platform": "website",
+                    "source_type": "bio_link",
+                    "source_url": url,
+                }
+
+    def _extract_email_generic(self, url, channel_name, channel_url):
+        """Generic email extraction from any external page."""
+        html = fetch_with_retry(url, 1, self.delay_ms)
+        if not html:
+            return
+
+        emails = set(re.findall(
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            html,
+        ))
+        emails |= set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', html))
+
+        for email in emails:
+            if is_valid_email(email):
+                yield {
+                    "email": email,
+                    "channel_name": channel_name,
+                    "channel_url": channel_url,
+                    "evidence_link": url,
+                    "confidence_score": 0.65,
+                    "source": "social_link",
+                    "source_platform": "website",
+                    "source_type": "external_site",
+                    "source_url": url,
+                }
+
     # ── Strategy: Web Search ──
 
     def _search_web_search(self, channel_name, channel_url, ctx):
@@ -205,8 +424,13 @@ class EmailFinder:
             f'"{channel_name}" 이메일 연락처',
         ]
 
+        total_results = 0
+
         for query in queries:
-            result_urls = self._duckduckgo_search(query)
+            result_urls = self._multi_engine_search(query)
+            total_results += len(result_urls)
+            if not result_urls:
+                continue
 
             for result_url in result_urls[:3]:
                 # Skip YouTube itself (already searched)
@@ -229,9 +453,14 @@ class EmailFinder:
                             "confidence_score": 0.7,
                             "source": "web_search",
                             "source_platform": "website",
-                            "source_type": "external_site",
+                            "source_type": "search_result",
                             "source_url": result_url,
                         }
+
+        # Domain guessing fallback when all search engines are blocked
+        if total_results == 0:
+            _log(f"[web_search] All search engines blocked, trying domain guessing")
+            yield from self._search_domain_guess(channel_name, channel_url, ctx)
 
     # ── Strategy: Aggregator Sites ──
 
@@ -275,6 +504,7 @@ class EmailFinder:
             "twitter.com", "x.com", "instagram.com", "facebook.com",
             "tiktok.com", "twitch.tv", "discord.gg", "discord.com",
             "threads.net", "linkedin.com",
+            "blog.naver.com", "naver.me",
         }
 
         own_sites = []
@@ -344,32 +574,296 @@ class EmailFinder:
                             "source_url": link,
                         }
 
+    # ── Strategy: Naver Blog Deep Scan (Level 3) ──
+
+    def _search_naver_blog_deep(self, channel_name, channel_url, ctx):
+        """Deep scan Naver blog: check posts listing and recent posts for email."""
+        html = ctx["about_html"]
+        if not html:
+            return
+
+        external_links = self._extract_youtube_external_links(html)
+        naver_links = [
+            link for link in external_links
+            if "blog.naver.com" in urlparse(link).netloc.lower()
+            or "naver.me" in urlparse(link).netloc.lower()
+        ]
+
+        if not naver_links:
+            return
+
+        blog_url = naver_links[0]
+        match = re.search(r'blog\.naver\.com/([^/?#]+)', blog_url)
+        if not match:
+            return
+
+        blog_id = match.group(1)
+        _log(f"[naver_blog_deep] Deep scanning blog: {blog_id}")
+
+        # Scan the blog's "about me" or intro post (category 0 is often intro)
+        intro_urls = [
+            f"https://blog.naver.com/PostList.naver?blogId={blog_id}&categoryNo=0",
+            f"https://blog.naver.com/{blog_id}?Redirect=Log",
+        ]
+
+        for url in intro_urls:
+            page_html = fetch_with_retry(url, self.max_retries, self.delay_ms)
+            if not page_html:
+                continue
+
+            emails = extract_emails_from_html(page_html)
+            for email in emails:
+                if is_valid_email(email):
+                    yield {
+                        "email": email,
+                        "channel_name": channel_name,
+                        "channel_url": channel_url,
+                        "evidence_link": url,
+                        "confidence_score": 0.65,
+                        "source": "naver_blog_deep",
+                        "source_platform": "naver_blog",
+                        "source_type": "social_profile",
+                        "source_url": url,
+                    }
+
+    # ── Strategy: Domain Guessing (fallback when all search engines blocked) ──
+
+    def _search_domain_guess(self, channel_name, channel_url, ctx):
+        """Guess creator's website domain and scan for emails."""
+        handle = self._extract_channel_handle(channel_url, ctx.get("about_html"))
+        if not handle:
+            return
+
+        # Clean handle for domain guessing
+        clean = re.sub(r"[^a-zA-Z0-9]", "", handle).lower()
+        if not clean or len(clean) < 3:
+            return
+
+        _log(f"[domain_guess] Trying domain guesses for handle: {handle}")
+
+        suffixes = [".com", ".co.kr", ".kr", ".net"]
+        for suffix in suffixes:
+            guess_url = f"https://{clean}{suffix}"
+            html = fetch_with_retry(guess_url, max_retries=1, delay_ms=self.delay_ms,
+                                    timeout=10)
+            if not html:
+                continue
+
+            _log(f"[domain_guess] Found live site: {guess_url}")
+            emails = extract_emails_from_html(html)
+            for email in emails:
+                if is_valid_email(email):
+                    yield {
+                        "email": email,
+                        "channel_name": channel_name,
+                        "channel_url": channel_url,
+                        "evidence_link": guess_url,
+                        "confidence_score": 0.55,
+                        "source": "domain_guess",
+                        "source_platform": "website",
+                        "source_type": "domain_guess",
+                        "source_url": guess_url,
+                    }
+
+            # Also check contact/about pages on the guessed domain
+            for path in ["/contact", "/about", "/문의"]:
+                contact_url = f"{guess_url}{path}"
+                contact_html = fetch_with_retry(contact_url, max_retries=1,
+                                                delay_ms=self.delay_ms, timeout=10)
+                if not contact_html:
+                    continue
+                emails = extract_emails_from_html(contact_html)
+                for email in emails:
+                    if is_valid_email(email):
+                        yield {
+                            "email": email,
+                            "channel_name": channel_name,
+                            "channel_url": channel_url,
+                            "evidence_link": contact_url,
+                            "confidence_score": 0.55,
+                            "source": "domain_guess",
+                            "source_platform": "website",
+                            "source_type": "domain_guess",
+                            "source_url": contact_url,
+                        }
+
+            # If we found a live site, don't try more suffixes
+            break
+
+    def _extract_channel_handle(self, channel_url, html=None):
+        """Extract YouTube channel handle (e.g. @handle) from URL or HTML."""
+        match = re.search(r"/@([a-zA-Z0-9_.-]+)", channel_url)
+        if match:
+            return match.group(1)
+        match = re.search(r"/c/([a-zA-Z0-9_.-]+)", channel_url)
+        if match:
+            return match.group(1)
+        if html:
+            match = re.search(r'"vanityChannelUrl"\s*:\s*"[^"]*/@([^"]+)"', html)
+            if match:
+                return match.group(1)
+        return None
+
     # ── Helpers ──
 
+    # Track which search engines are blocked to avoid repeated timeouts
+    _blocked_engines = set()
+
+    def _multi_engine_search(self, query):
+        """Try multiple search engines in order. Returns list of URLs or []."""
+        engines = [
+            ("google", self._google_search),
+            ("duckduckgo", self._duckduckgo_search),
+            ("bing", self._bing_search),
+        ]
+        for name, search_fn in engines:
+            if name in EmailFinder._blocked_engines:
+                continue
+            result = search_fn(query)
+            if result is None:
+                # Engine is blocked
+                EmailFinder._blocked_engines.add(name)
+                _log(f"[web_search] {name} appears blocked, trying next engine")
+                continue
+            if result:
+                return result
+
+        # All engines blocked — try domain guessing as last resort
+        if len(EmailFinder._blocked_engines) >= len(engines):
+            _log("[web_search] All search engines blocked")
+        return []
+
+    def _google_search(self, query):
+        """Search Google and return result URLs.
+        Returns None if blocked, [] if no results."""
+        import requests as _requests
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        }
+
+        try:
+            resp = _requests.get(
+                f"https://www.google.com/search?q={quote_plus(query)}&num=5&hl=ko",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 429 or resp.status_code == 403:
+                return None
+            if resp.status_code == 200 and resp.text:
+                import re as _re
+                urls = []
+                # Extract URLs from Google search results
+                for match in _re.finditer(r'href="(https?://(?!www\.google|google\.com|accounts\.google)[^"&]+)"', resp.text):
+                    url = match.group(1)
+                    if not any(d in url for d in ['google.com', 'googleapis.com', 'gstatic.com', 'youtube.com']):
+                        urls.append(url)
+                return urls[:5] if urls else []
+        except _requests.Timeout:
+            return None
+        except Exception:
+            pass
+        return []
+
     def _duckduckgo_search(self, query):
-        """Search DuckDuckGo HTML and return result URLs."""
-        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
-        html = fetch_with_retry(search_url, self.max_retries, self.delay_ms)
-        if not html:
-            return []
+        """Search DuckDuckGo and return result URLs.
+        Returns None if DDG appears blocked (403), [] if no results, or list of URLs.
+        Uses short timeout to avoid blocking the pipeline."""
+        import requests as _requests
 
-        urls = []
-        from bs4 import BeautifulSoup
-        from urllib.parse import parse_qs, urlparse as _urlparse
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        }
 
-        soup = BeautifulSoup(html, "lxml")
+        # Strategy 1: DuckDuckGo Lite (less aggressive blocking)
+        try:
+            resp = _requests.get(
+                f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 403:
+                return None  # signal: DDG is blocking us
 
-        for link in soup.select("a.result__a"):
-            href = link.get("href", "")
-            if "duckduckgo.com/l/" in href:
-                # Extract actual URL from redirect
-                params = parse_qs(_urlparse(href).query)
-                if "uddg" in params:
-                    urls.append(params["uddg"][0])
-            elif href.startswith("http"):
-                urls.append(href)
+            if resp.status_code == 200 and resp.text:
+                import re as _re
+                from urllib.parse import urlparse as _urlparse
+                urls = []
+                for match in _re.finditer(r'href="(https?://(?!lite\.duckduckgo|duckduckgo)[^"]+)"', resp.text):
+                    parsed = _urlparse(match.group(1))
+                    if 'duckduckgo' not in parsed.netloc:
+                        urls.append(match.group(1))
+                if urls:
+                    return urls[:5]
+        except _requests.Timeout:
+            return None  # treat timeout as blocked
+        except Exception:
+            pass
 
-        return urls[:5]
+        # Strategy 2: DuckDuckGo HTML (fallback)
+        try:
+            resp = _requests.get(
+                f"https://html.duckduckgo.com/html/?q={quote_plus(query)}",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code == 403:
+                return None
+
+            if resp.status_code == 200 and resp.text:
+                from bs4 import BeautifulSoup
+                from urllib.parse import parse_qs, urlparse as _urlparse
+                soup = BeautifulSoup(resp.text, "lxml")
+                urls = []
+                for link in soup.select("a.result__a"):
+                    href = link.get("href", "")
+                    if "duckduckgo.com/l/" in href:
+                        params = parse_qs(_urlparse(href).query)
+                        if "uddg" in params:
+                            urls.append(params["uddg"][0])
+                    elif href.startswith("http"):
+                        urls.append(href)
+                return urls[:5]
+        except _requests.Timeout:
+            return None
+        except Exception:
+            pass
+
+        return []
+
+    def _bing_search(self, query):
+        """Search Bing and return result URLs.
+        Returns None if blocked, [] if no results."""
+        import requests as _requests
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        }
+
+        try:
+            resp = _requests.get(
+                f"https://www.bing.com/search?q={quote_plus(query)}",
+                headers=headers, timeout=8,
+            )
+            if resp.status_code in (403, 429):
+                return None
+            if resp.status_code == 200 and resp.text:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(resp.text, "lxml")
+                urls = []
+                for result in soup.select("li.b_algo h2 a"):
+                    href = result.get("href", "")
+                    if href.startswith("http"):
+                        urls.append(href)
+                return urls[:5] if urls else []
+        except _requests.Timeout:
+            return None
+        except Exception:
+            pass
+        return []
 
     # Domains that are YouTube/Google internal — not creator-owned
     _INTERNAL_DOMAINS = {

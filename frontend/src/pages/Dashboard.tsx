@@ -29,14 +29,14 @@ export default function Dashboard() {
     <>
       {/* Quick Actions */}
       <div className="quick-actions">
-        <button className="btn btn-primary" onClick={() => navigate('/collection')}>
+        <button className="btn btn-primary" onClick={() => navigate('/search/new')}>
           <span>{'\u{1F50D}'}</span> 새 탐색 시작
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/leads')}>
-          <span>{'\u{1F465}'}</span> 전체 리드
+        <button className="btn btn-secondary" onClick={() => navigate('/review')}>
+          <span>{'\u{1F4CB}'}</span> 리드 검토
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/master-list')}>
-          <span>{'\u{1F4CB}'}</span> 마스터 리스트
+        <button className="btn btn-secondary" onClick={() => navigate('/contacts')}>
+          <span>{'\u2709\uFE0F'}</span> 연락 대상
         </button>
       </div>
 
@@ -83,13 +83,13 @@ export default function Dashboard() {
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">최근 수집된 리드</h2>
-              <a className="card-link" onClick={() => navigate('/leads')} style={{ cursor: 'pointer' }}>전체 보기 {'\u2192'}</a>
+              <a className="card-link" onClick={() => navigate('/review')} style={{ cursor: 'pointer' }}>검토하기 {'\u2192'}</a>
             </div>
             {!leads?.length ? (
               <div className="empty-state">
                 <span className="empty-state-icon">{'\u{1F465}'}</span>
                 <h3>아직 수집된 리드가 없습니다</h3>
-                <p>리드 수집 페이지에서 크롤링을 시작하세요</p>
+                <p>새 탐색을 시작하여 리드를 수집하세요</p>
               </div>
             ) : (
               <div className="table-wrap">
@@ -133,7 +133,7 @@ export default function Dashboard() {
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">탐색 현황</h2>
-              <a className="card-link" onClick={() => navigate('/collection')} style={{ cursor: 'pointer' }}>전체 보기 {'\u2192'}</a>
+              <a className="card-link" onClick={() => navigate('/search/active')} style={{ cursor: 'pointer' }}>전체 보기 {'\u2192'}</a>
             </div>
             {!jobs?.length ? (
               <div className="empty-state" style={{ padding: '24px 20px' }}>
