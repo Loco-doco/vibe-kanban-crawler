@@ -62,6 +62,11 @@ export async function getEnrichmentRun(runId: number): Promise<EnrichmentRun> {
   return data.data
 }
 
+export async function getEnrichmentRuns(jobId: number): Promise<EnrichmentRun[]> {
+  const { data } = await api.get<{ data: EnrichmentRun[] }>(`/jobs/${jobId}/enrichment-runs`)
+  return data.data
+}
+
 export interface ParsedPrompt {
   // V2 fields
   target_persona: string | null

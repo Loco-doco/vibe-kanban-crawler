@@ -96,6 +96,27 @@ defmodule LeadResearcherWeb.JobController do
     end
   end
 
+  def enrichment_runs(conn, %{"id" => id}) do
+    runs = EnrichmentRuns.list_by_job(String.to_integer(id))
+
+    json(conn, %{
+      data: Enum.map(runs, fn run ->
+        %{
+          id: run.id,
+          job_id: run.job_id,
+          run_type: run.run_type,
+          status: run.status,
+          total: run.total,
+          processed: run.processed,
+          updated: run.updated,
+          failed: run.failed,
+          inserted_at: run.inserted_at,
+          updated_at: run.updated_at
+        }
+      end)
+    })
+  end
+
   def enrichment_run_status(conn, %{"id" => id}) do
     run = EnrichmentRuns.get!(String.to_integer(id))
 

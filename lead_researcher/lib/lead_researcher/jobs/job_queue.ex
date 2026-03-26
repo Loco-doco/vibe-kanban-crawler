@@ -3,7 +3,9 @@ defmodule LeadResearcher.Jobs.JobQueue do
   require Logger
 
   alias LeadResearcher.Jobs
+  alias LeadResearcher.Leads
   alias LeadResearcher.Crawler.Runner
+  alias LeadResearcher.Enrichments.EnrichmentRuns
 
   @poll_interval 5_000
   @max_concurrent 3
@@ -158,40 +160,50 @@ defmodule LeadResearcher.Jobs.JobQueue do
   end
 
   # Post-processing: subscriber backfill → channel enrichment (sequential, fire-and-forget)
+  # Creates trackable EnrichmentRun records so the frontend can poll progress.
   defp schedule_post_processing(job_id) do
-    job = Jobs.get_job!(job_id)
+    Logger.info("Scheduling post-processing for job #{job_id}")
 
-    # Only auto-enrich primary discovery jobs (not supplementary or URL-mode jobs)
-    if job.mode == "discovery" and is_nil(job.parent_job_id) do
-      Logger.info("Scheduling post-processing for job #{job_id}")
+    Task.Supervisor.start_child(LeadResearcher.TaskSupervisor, fn ->
+      try do
+        # Step 1: subscriber backfill (with trackable run)
+        missing = Leads.list_leads_missing_subscribers(job_id)
 
-      Task.Supervisor.start_child(LeadResearcher.TaskSupervisor, fn ->
-        try do
-          # Step 1: subscriber backfill
-          Logger.info("Job #{job_id}: auto subscriber backfill starting")
-          case Runner.run_enrich_subscribers(job_id) do
+        if missing != [] do
+          {:ok, sub_run} = EnrichmentRuns.create(job_id, "subscribers", length(missing))
+          Logger.info("Job #{job_id}: auto subscriber backfill starting (run #{sub_run.id}, #{length(missing)} leads)")
+
+          case Runner.run_enrich_subscribers(job_id, sub_run.id) do
             {:ok, count} ->
               Logger.info("Job #{job_id}: auto subscriber backfill done (#{count} updated)")
             {:error, reason} ->
               Logger.warning("Job #{job_id}: auto subscriber backfill failed: #{inspect(reason)}")
           end
+        else
+          Logger.info("Job #{job_id}: no leads missing subscriber_count, skipping backfill")
+        end
 
-          # Step 2: channel enrichment
-          Logger.info("Job #{job_id}: auto channel enrichment starting")
-          case Runner.run_enrich_channels(job_id) do
+        # Step 2: channel enrichment (with trackable run)
+        candidates = Leads.list_leads_for_enrichment(job_id)
+
+        if candidates != [] do
+          {:ok, ch_run} = EnrichmentRuns.create(job_id, "channels", length(candidates))
+          Logger.info("Job #{job_id}: auto channel enrichment starting (run #{ch_run.id}, #{length(candidates)} leads)")
+
+          case Runner.run_enrich_channels(job_id, ch_run.id) do
             {:ok, count} ->
               Logger.info("Job #{job_id}: auto channel enrichment done (#{count} enriched)")
             {:error, reason} ->
               Logger.warning("Job #{job_id}: auto channel enrichment failed: #{inspect(reason)}")
           end
-        rescue
-          e ->
-            Logger.error("Job #{job_id}: post-processing error: #{inspect(e)}")
+        else
+          Logger.info("Job #{job_id}: no leads need enrichment, skipping")
         end
-      end)
-    else
-      Logger.debug("Skipping post-processing for job #{job_id} (not a primary discovery job)")
-    end
+      rescue
+        e ->
+          Logger.error("Job #{job_id}: post-processing error: #{inspect(e)}")
+      end
+    end)
   end
 
   defp schedule_poll do

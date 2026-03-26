@@ -11,6 +11,14 @@ defmodule LeadResearcher.Enrichments.EnrichmentRuns do
 
   def get!(id), do: Repo.get!(EnrichmentRun, id)
 
+  @doc "List enrichment runs for a job, newest first."
+  def list_by_job(job_id) do
+    EnrichmentRun
+    |> where([r], r.job_id == ^job_id)
+    |> order_by([r], desc: r.inserted_at)
+    |> Repo.all()
+  end
+
   def increment_processed(run_id) do
     from(r in EnrichmentRun, where: r.id == ^run_id)
     |> Repo.update_all(inc: [processed: 1, updated: 1])

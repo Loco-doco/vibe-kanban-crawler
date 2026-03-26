@@ -3588,6 +3588,27 @@ body {
 }
 .quick-detail-link:hover { text-decoration: underline; }
 
+/* Enrichment section in drawer */
+.enrichment-empty {
+  font-size: 0.78rem;
+  color: var(--gray-400);
+  padding-left: 22px;
+  font-style: italic;
+}
+.enrichment-text {
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.enrichment-tag {
+  display: inline-block;
+  background: var(--purple-light, #f3e8ff);
+  color: #7c3aed;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  margin: 1px 3px 1px 0;
+}
+
 /* Full Detail CTA in drawer */
 .full-detail-cta {
   display: block;
