@@ -1,12 +1,20 @@
 import type { Lead } from '../types'
-import { PLATFORM_LABELS, SUSPECT_REASON_LABELS } from '../types'
+import {
+  PLATFORM_LABELS,
+  CONTACT_READINESS_LABELS,
+  SUSPECT_REASON_LABELS,
+  AUDIENCE_TIER_LABELS,
+  AUDIENCE_DISPLAY_STATUS_LABELS,
+  AUDIENCE_FAILURE_REASON_LABELS,
+  REVIEW_STATUS_LABELS,
+} from '../types'
 
 type ContactCategory = 'direct_contact' | 'shared_email' | 'platform_email' | 'needs_check'
 
 const CONTACT_CATEGORY_LABELS: Record<ContactCategory, string> = {
-  direct_contact: '연락 가능',
+  direct_contact: '직접 연락 가능',
   shared_email: '공용 메일',
-  platform_email: '플랫폼 의심',
+  platform_email: '플랫폼 메일 의심',
   needs_check: '검증 필요',
 }
 
@@ -27,35 +35,96 @@ function deriveContactCategory(lead: Lead): ContactCategory {
   return 'needs_check'
 }
 
-function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low' } {
-  if (lead.contact_readiness === 'no_email')
-    return { label: '이메일 확보 필요', priority: 'high' }
-  if (lead.contact_readiness === 'platform_suspect')
-    return { label: '이메일 검증 필요', priority: 'high' }
-  if (!lead.subscriber_count && !lead.audience_size_override)
-    return { label: '영향력 보정 필요', priority: 'medium' }
-  if (lead.enrichment_status === 'not_started')
-    return { label: '프로필 보강 필요', priority: 'medium' }
-  if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
-    return { label: '연락 가능', priority: 'low' }
-  return { label: '검토 필요', priority: 'medium' }
-}
-
-function formatSubscriberCount(count: number | null | undefined): string {
-  if (count === null || count === undefined) return '-'
-  return count.toLocaleString('ko-KR')
-}
-
 interface Props {
   leads: Lead[]
   selectedIds: Set<number>
+  activeQueue: string
   onToggleSelect: (id: number) => void
   onToggleSelectAll: () => void
   onViewDetail: (lead: Lead) => void
+  onInlineAction: (leadId: number, action: string) => void
 }
 
-export default function ReviewTable({ leads, selectedIds, onToggleSelect, onToggleSelectAll, onViewDetail }: Props) {
+type ActionType = 'system' | 'user'
+
+function getRecommendedAction(lead: Lead): { label: string; priority: 'high' | 'medium' | 'low'; actionType: ActionType } {
+  if (lead.contact_readiness === 'no_email')
+    return { label: '이메일 확보 필요', priority: 'high', actionType: 'user' }
+  if (lead.contact_readiness === 'platform_suspect')
+    return { label: '이메일 검증 필요', priority: 'high', actionType: 'user' }
+  if (lead.audience_display_status === 'not_collected')
+    return { label: '영향력 보정', priority: 'medium', actionType: 'system' }
+  if (lead.enrichment_status === 'not_started')
+    return { label: '프로필 보강', priority: 'medium', actionType: 'system' }
+  if (lead.contact_readiness === 'contactable' && (lead.review_status === 'auto_approved' || lead.review_status === 'approved'))
+    return { label: '연락 가능', priority: 'low', actionType: 'user' }
+  return { label: '검토 필요', priority: 'medium', actionType: 'user' }
+}
+
+function truncateEmail(email: string | null, max: number = 28): string {
+  if (!email) return '(없음)'
+  return email.length > max ? email.slice(0, max) + '...' : email
+}
+
+function InlineActions({ lead, activeQueue, onAction }: {
+  lead: Lead
+  activeQueue: string
+  onAction: (leadId: number, action: string) => void
+}) {
+  if (activeQueue === 'synced') return null
+
+  if (activeQueue === 'conflict_queue') {
+    return (
+      <div className="inline-actions">
+        <button className="inline-btn approve" onClick={e => { e.stopPropagation(); onAction(lead.id, 'conflict_keep') }} title="충돌 무시">
+          {'\u2714'}
+        </button>
+        <button className="inline-btn reject" onClick={e => { e.stopPropagation(); onAction(lead.id, 'conflict_reject') }} title="제외">
+          {'\u2716'}
+        </button>
+      </div>
+    )
+  }
+
+  if (activeQueue === 'ready_to_sync') {
+    return (
+      <div className="inline-actions">
+        <button className="inline-btn sync" onClick={e => { e.stopPropagation(); onAction(lead.id, 'sync') }} title="최종 반영">
+          {'\u2B06'}
+        </button>
+      </div>
+    )
+  }
+
+  // Default review queues
+  const isApproved = lead.review_status === 'approved' || lead.master_sync_status !== 'not_synced'
+  return (
+    <div className="inline-actions">
+      <button
+        className="inline-btn approve"
+        onClick={e => { e.stopPropagation(); onAction(lead.id, 'approved') }}
+        disabled={isApproved}
+        title="승인"
+      >{'\u2714'}</button>
+      <button
+        className="inline-btn hold"
+        onClick={e => { e.stopPropagation(); onAction(lead.id, 'held') }}
+        disabled={lead.review_status === 'held'}
+        title="보류"
+      >{'\u23F8'}</button>
+      <button
+        className="inline-btn reject"
+        onClick={e => { e.stopPropagation(); onAction(lead.id, 'rejected') }}
+        disabled={lead.review_status === 'rejected'}
+        title="제외"
+      >{'\u2716'}</button>
+    </div>
+  )
+}
+
+export default function ReviewTable({ leads, selectedIds, activeQueue, onToggleSelect, onToggleSelectAll, onViewDetail, onInlineAction }: Props) {
   const allSelected = leads.length > 0 && selectedIds.size === leads.length
+  const showActions = activeQueue !== 'synced'
 
   return (
     <div className="table-wrap">
@@ -63,12 +132,19 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
         <thead>
           <tr>
             <th className="col-check">
-              <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleSelectAll}
+              />
             </th>
+            {showActions && <th className="col-inline-actions">액션</th>}
             <th>리드명</th>
+            <th>이메일</th>
             <th>이메일 상태</th>
-            <th>플랫폼</th>
-            <th>구독자</th>
+            <th>플랫폼 / 영향력</th>
+            <th>카테고리</th>
+            <th>리뷰</th>
             <th>다음 단계</th>
             <th className="col-detail"></th>
           </tr>
@@ -76,23 +152,27 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
         <tbody>
           {leads.map(lead => {
             const action = getRecommendedAction(lead)
-            const contactCat = deriveContactCategory(lead)
             const email = lead.contact_email || lead.email
-            const effectiveAudience = lead.audience_size_override || lead.subscriber_count
+            const contactCat = deriveContactCategory(lead)
             return (
               <tr
                 key={lead.id}
                 className={`review-row${selectedIds.has(lead.id) ? ' selected' : ''}`}
-                onClick={() => onViewDetail(lead)}
-                style={{ cursor: 'pointer' }}
+                onClick={() => onToggleSelect(lead.id)}
               >
-                <td className="col-check" onClick={e => e.stopPropagation()}>
+                <td className="col-check">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(lead.id)}
                     onChange={() => onToggleSelect(lead.id)}
+                    onClick={e => e.stopPropagation()}
                   />
                 </td>
+                {showActions && (
+                  <td className="col-inline-actions">
+                    <InlineActions lead={lead} activeQueue={activeQueue} onAction={onInlineAction} />
+                  </td>
+                )}
                 <td className="col-name">
                   <span className="lead-name-text">
                     {lead.effective_name || <span className="text-muted">(이름 없음)</span>}
@@ -108,36 +188,65 @@ export default function ReviewTable({ leads, selectedIds, onToggleSelect, onTogg
                     >{'\u2197'}</a>
                   )}
                 </td>
+                <td className="col-email">
+                  <span className="email-text" title={email || undefined}>
+                    {truncateEmail(email)}
+                  </span>
+                </td>
                 <td className="col-contact-category">
                   <span className={`contact-category-badge ${CONTACT_CATEGORY_VARIANTS[contactCat]}`}>
                     {CONTACT_CATEGORY_LABELS[contactCat]}
                   </span>
-                  {email && <span className="email-hint" title={email}>{email.length > 20 ? email.slice(0, 20) + '...' : email}</span>}
                   {lead.suspect_reason && (
                     <span className="suspect-info-icon" title={SUSPECT_REASON_LABELS[lead.suspect_reason] || lead.suspect_reason}>
                       {'\u24D8'}
                     </span>
                   )}
                 </td>
-                <td>
+                <td className="col-platform-audience">
                   <span className={`platform-badge ${lead.platform}`}>
                     {PLATFORM_LABELS[lead.platform] || lead.platform}
                   </span>
+                  {' '}
+                  {lead.audience_display_status === 'collected' ? (
+                    <span className="audience-value-inline">
+                      {lead.effective_audience_label || lead.effective_audience_size}
+                    </span>
+                  ) : (
+                    <span
+                      className={`audience-status ${lead.audience_display_status}`}
+                      title={lead.audience_failure_reason ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason) : undefined}
+                    >
+                      {lead.audience_failure_reason
+                        ? (AUDIENCE_FAILURE_REASON_LABELS[lead.audience_failure_reason] || lead.audience_failure_reason)
+                        : AUDIENCE_DISPLAY_STATUS_LABELS[lead.audience_display_status]}
+                    </span>
+                  )}
+                  {lead.effective_audience_tier && (
+                    <span className={`tier-badge-sm ${lead.effective_audience_tier}`}>
+                      {AUDIENCE_TIER_LABELS[lead.effective_audience_tier]}
+                    </span>
+                  )}
                 </td>
-                <td className="col-subscriber-count">
-                  {effectiveAudience
-                    ? <span className="subscriber-number">{formatSubscriberCount(effectiveAudience)}</span>
-                    : <span className="subscriber-missing" title={lead.audience_failure_reason || '구독자 수 미수집'}>
-                        {lead.audience_failure_reason === 'fetch_failed' ? '수집 실패'
-                          : lead.audience_failure_reason === 'parse_failed' ? '파싱 실패'
-                          : lead.audience_failure_reason === 'login_required' ? '비공개'
-                          : lead.audience_failure_reason === 'page_structure_changed' ? '구조 변경'
-                          : '미수집'}
-                      </span>
-                  }
+                <td className="col-tags">
+                  {lead.normalized_tags.length > 0 ? (
+                    <span className="tag-chips">
+                      {lead.normalized_tags.map(tag => (
+                        <span key={tag} className="tag-chip">{tag}</span>
+                      ))}
+                    </span>
+                  ) : lead.discovery_keyword ? (
+                    <span className="text-muted">{lead.discovery_keyword}</span>
+                  ) : '-'}
                 </td>
                 <td>
-                  <span className={`action-label ${action.priority}`} title={action.label}>
+                  <span className={`review-badge ${lead.review_status}`}>
+                    {REVIEW_STATUS_LABELS[lead.review_status]}
+                  </span>
+                </td>
+                <td>
+                  <span className={`action-label ${action.priority} ${action.actionType}`} title={action.label}>
+                    <span className="action-type-icon">{action.actionType === 'system' ? '\u2699' : '\u270B'}</span>
                     {action.label}
                   </span>
                 </td>
