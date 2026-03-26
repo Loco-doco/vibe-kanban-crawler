@@ -61,8 +61,20 @@ defmodule LeadResearcher.MasterList do
 
   def remove_entry(lead_id) do
     case Repo.get_by(MasterListEntry, lead_id: lead_id) do
-      nil -> {:error, :not_found}
-      entry -> Repo.delete(entry)
+      nil ->
+        {:error, :not_found}
+
+      entry ->
+        # Reset lead's master_sync_status back to not_synced
+        case Repo.get(Lead, lead_id) do
+          nil -> :ok
+          lead ->
+            lead
+            |> Ecto.Changeset.change(%{master_sync_status: "not_synced"})
+            |> Repo.update()
+        end
+
+        Repo.delete(entry)
     end
   end
 
@@ -125,7 +137,13 @@ defmodule LeadResearcher.MasterList do
 
   defp maybe_search(query, %{"search" => search}) when is_binary(search) and search != "" do
     pattern = "%#{search}%"
-    where(query, [_e, l], like(l.email, ^pattern) or like(l.channel_name, ^pattern))
+
+    where(
+      query,
+      [_e, l],
+      like(l.email, ^pattern) or like(l.channel_name, ^pattern) or
+        like(l.display_name, ^pattern) or like(l.contact_email, ^pattern)
+    )
   end
   defp maybe_search(query, _), do: query
 
