@@ -380,6 +380,14 @@ export const TERMINATION_SENTENCES: Record<string, string> = {
   user_cancelled: '사용자가 탐색을 중단했습니다.',
 }
 
+export const PLATFORM_OPTIONS: { value: string; label: string }[] = [
+  { value: 'youtube', label: '유튜브' },
+  { value: 'instagram', label: '인스타그램' },
+  { value: 'class101', label: 'Class101' },
+  { value: 'liveklass', label: '라이브클래스' },
+  { value: 'taling', label: '탈잉' },
+]
+
 export const SUGGESTED_CATEGORIES = [
   '주식', '부업', '재테크', 'AI', '자기계발', '건강',
   '요리', '여행', '뷰티', '패션', '육아', '교육',
